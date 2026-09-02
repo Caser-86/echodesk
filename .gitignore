@@ -25,6 +25,7 @@ backend/vector_cache/
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/tsconfig.tsbuildinfo
 
 # 编辑器/系统
 .idea/
