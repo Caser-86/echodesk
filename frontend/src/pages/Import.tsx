@@ -127,7 +127,7 @@ export default function ImportPage() {
         <p className="text-muted" style={{ marginBottom: 16 }}>
           支持 CSV / XLSX / TXT，≤ 20MB；自动识别 UTF-8 与 GBK 编码
         </p>
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center flex-wrap gap-3">
           <Button
             variant="secondary"
             onClick={() => fileRef.current?.click()}

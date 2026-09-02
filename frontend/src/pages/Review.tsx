@@ -179,7 +179,7 @@ export default function ReviewPage() {
               className="input"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              style={{ width: 240 }}
+              style={{ maxWidth: 240, width: "100%" }}
               placeholder="例如：EchoDesk 示例产品"
             />
           </label>

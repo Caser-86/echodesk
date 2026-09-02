@@ -33,3 +33,6 @@ frontend/tsconfig.tsbuildinfo
 .DS_Store
 Thumbs.db
 *.log
+
+# Trae plan artifacts
+.trae/

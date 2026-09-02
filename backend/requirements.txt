@@ -28,4 +28,5 @@ chardet>=5.2            # 编码自动检测（中文 GBK）
 
 # 测试与质量
 pytest>=8.2
+pytest-asyncio>=0.24
 ruff>=0.5

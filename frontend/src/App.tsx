@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Routes, Route, NavLink } from "react-router-dom";
 import ImportPage from "./pages/Import";
 import InsightsPage from "./pages/Insights";
 import ReviewPage from "./pages/Review";
 import ExportPage from "./pages/Export";
 import { usePingBackend } from "./api";
+import { useTheme } from "./hooks/useTheme";
 
 const navItems = [
   { to: "/", label: "导入数据", end: true },
@@ -12,22 +14,27 @@ const navItems = [
   { to: "/export", label: "导出" },
 ];
 
+function ThemeToggle({ theme, onToggle }: { theme: string; onToggle: () => void }) {
+  return (
+    <button
+      className="theme-toggle"
+      onClick={onToggle}
+      title={theme === "dark" ? "切换到浅色模式" : "切换到暗色模式"}
+      aria-label={theme === "dark" ? "切换到浅色模式" : "切换到暗色模式"}
+    >
+      {theme === "dark" ? "☀️" : "🌙"}
+    </button>
+  );
+}
+
 export default function App() {
   const backend = usePingBackend();
+  const { theme, toggle } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-          height: "var(--header-h)",
-          background: "rgba(255,255,255,0.92)",
-          backdropFilter: "blur(8px)",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
+      <header className="app-header">
         <div className="container flex items-center justify-between" style={{ height: "100%" }}>
           <div className="flex items-center gap-3">
             <div
@@ -52,7 +59,7 @@ export default function App() {
             </div>
           </div>
 
-          <nav className="flex items-center" style={{ gap: 6 }}>
+          <nav className="desktop-nav flex items-center" style={{ gap: 6 }}>
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -65,19 +72,47 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2" style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: backend === "ok" ? "var(--success)" : "var(--danger)",
-              }}
-            />
-            后端 {backend === "ok" ? "已连接" : "未连接"}
+          <div className="flex items-center gap-2">
+            <ThemeToggle theme={theme} onToggle={toggle} />
+            <div
+              className="flex items-center gap-2 header-status-text"
+              style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: backend === "ok" ? "var(--success)" : "var(--danger)",
+                }}
+              />
+              后端 {backend === "ok" ? "已连接" : "未连接"}
+            </div>
+            <button
+              className="menu-button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="切换导航菜单"
+              aria-expanded={menuOpen}
+            >
+              ☰
+            </button>
           </div>
         </div>
       </header>
+
+      <nav className={`mobile-nav ${menuOpen ? "open" : ""}`}>
+        {navItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+            onClick={() => setMenuOpen(false)}
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
 
       <main style={{ flex: 1, padding: "24px 0 40px" }}>
         <Routes>

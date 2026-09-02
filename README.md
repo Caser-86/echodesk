@@ -4,6 +4,8 @@
 
 **30 秒演示**：上传反馈文件（或粘贴文本、载入内置示例）→ 自动清洗 → 语义聚类出主题簇（含情感与代表原文）→ 勾选主题 → AI 生成结构化 PRD 草稿 → 人工审核编辑 → 导出 Markdown。
 
+**我独立完成了**：产品定义、AI 管线设计、前后端实现、UI 设计系统、测试体系、文档与迭代决策记录——把它作为求职作品集，展示端到端的 AI 产品工程能力。
+
 ```
 60 条三主题真实反馈（登录故障/导出缺陷/客服失联）
   → 清洗 60/60 有效 → HDBSCAN 聚出 3 簇（噪声 2 条被正确拒绝归类）
@@ -13,6 +15,10 @@
 **洞察页**——60 条杂乱反馈自动聚出 3 大主题，每簇含情感、概述与代表原文，可展开回溯全部成员：
 
 ![洞察页：60 条反馈自动聚出 3 大主题](docs/screenshots/insights.png)
+
+**暗色模式**：顶部一键切换，护眼且适合演示环境。
+
+![洞察页暗色模式](docs/screenshots/insights-dark.png)
 
 ***
 
@@ -52,6 +58,8 @@ CSV/XLSX/TXT → 去空/去重/截断 → 语义向量 → 降维 →  →  LLM 
 
 ![PRD 审核页：AI 草稿 + 人工编辑 + 还原原稿](docs/screenshots/review.png)
 
+![PRD 审核页暗色模式](docs/screenshots/review-dark.png)
+
 ## 4. 工程亮点（面试官可能关心的）
 
 - **四级向量降级链**：真实 Embedding API → 本地 sentence-transformers（bge-small-zh，隐私模式）→ TF-IDF → 哈希；聚类降级 HDBSCAN → KMeans（轮廓系数自动选 K）
@@ -60,7 +68,9 @@ CSV/XLSX/TXT → 去空/去重/截断 → 语义向量 → 降维 →  →  LLM 
 
 - **中文数据现实**：CSV 解析做了 BOM 剥离与 GBK 检测链（Excel 另存/中文 Windows 记事本两大坑），零第三方探测依赖
 
-- **测试**：37 个单元测试离线 2 秒跑完（CI 无凭据可用，LLM 全 mock）；每个里程碑均带 API 级 e2e 验证
+- **测试**：75 个后端单元测试 + 34 个前端组件/工具测试离线跑完（LLM 全 mock）；每个里程碑均带 API 级集成验证
+
+- **UI 设计系统**：自研 CSS tokens + 共享组件，无 UI 库依赖；支持响应式布局与系统/手动暗色模式
 
 - **Prompt 版本化**：PRD 生成 Prompt 独立文件管理（`backend/app/prompts/prd/generation.txt`），不散落在代码里
 
@@ -101,8 +111,9 @@ npm run dev                                        # http://localhost:5173
 ## 7. 技术架构
 
 ```
-frontend/  React 18 + TypeScript + Vite（无 UI 库，路由 react-router）
-   │  4 页面：导入 / 洞察（管线串联+簇卡片）/ PRD 审核（编辑/还原/下载）/ 导出（规划中）
+frontend/  React 18 + TypeScript + Vite（自研 UI 设计系统，路由 react-router）
+   │  4 页面：导入 / 洞察（管线串联+簇卡片）/ PRD 审核（编辑/还原/下载）/ 导出
+   │  响应式布局 + 暗色模式 + Vitest/React Testing Library 组件测试
    ▼  fetch（dev 经 Vite 代理）
 backend/   FastAPI + pydantic-settings
    ├─ api/pipeline.py    REST 端点（import/clean/cluster/prd-gen + SSE 进度通道）
@@ -131,13 +142,15 @@ backend/   FastAPI + pydantic-settings
 
 ## 9. 路线图
 
-- **v0.7**：浏览器端 e2e 测试（Playwright，截图脚本已就位）；Docker 镜像发布
+- **v0.7 ✅**：响应式布局、暗色模式、前后端单元测试补全
+
+- **v0.8**：GitHub Actions CI；浏览器端 e2e 测试（Playwright，截图脚本已就位）；Docker 镜像发布
 
 - **v2 构想**：多轮反馈增量合并、需求去重与关联（跨批次）、Jira/飞书对接
 
 ## 10. 技术栈
 
-React 18 · TypeScript · Vite | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（46 tests）
+React 18 · TypeScript · Vite · Vitest · React Testing Library | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（75 tests）
 
 ***
 

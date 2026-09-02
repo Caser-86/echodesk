@@ -11,38 +11,17 @@ export default function DiffView({ before, after }: DiffViewProps) {
   const diff = useMemo(() => computeLineDiff(before, after), [before, after]);
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          borderBottom: "1px solid var(--border)",
-          background: "var(--surface-hover)",
-          fontSize: "var(--text-xs)",
-          fontWeight: 600,
-          color: "var(--text-secondary)",
-        }}
-      >
-        <div style={{ padding: "var(--space-2) var(--space-3)", borderRight: "1px solid var(--border)" }}>AI 原稿</div>
-        <div style={{ padding: "var(--space-2) var(--space-3)" }}>人工修改后</div>
+      <div className="diff-header">
+        <div className="diff-cell diff-cell-head">AI 原稿</div>
+        <div className="diff-cell diff-cell-head">人工修改后</div>
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-xs)",
-          lineHeight: 1.6,
-        }}
-      >
-        <div style={{ borderRight: "1px solid var(--border)" }}>
+      <div className="diff-body">
+        <div className="diff-cell">
           {diff.map((d, i) => (
             <div
               key={`l-${i}`}
+              className={`diff-line ${d.type === "removed" ? "diff-removed" : d.type === "unchanged" ? "" : "diff-unchanged"}`}
               style={{
-                padding: "2px var(--space-3)",
-                background: d.type === "removed" ? "var(--danger-50)" : d.type === "unchanged" ? undefined : "#f9fafb",
-                color: d.type === "removed" ? "var(--danger)" : "var(--text-muted)",
-                minHeight: 22,
                 textDecoration: d.type === "removed" ? "line-through" : undefined,
               }}
             >
@@ -50,16 +29,11 @@ export default function DiffView({ before, after }: DiffViewProps) {
             </div>
           ))}
         </div>
-        <div>
+        <div className="diff-cell">
           {diff.map((d, i) => (
             <div
               key={`r-${i}`}
-              style={{
-                padding: "2px var(--space-3)",
-                background: d.type === "added" ? "var(--success-50)" : d.type === "unchanged" ? undefined : "#f9fafb",
-                color: d.type === "added" ? "#047857" : "var(--text-muted)",
-                minHeight: 22,
-              }}
+              className={`diff-line ${d.type === "added" ? "diff-added" : d.type === "unchanged" ? "" : "diff-unchanged"}`}
             >
               {d.after || "\u00a0"}
             </div>
