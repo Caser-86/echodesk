@@ -209,3 +209,64 @@ export function loadHandoff(): PrdHandoff | null {
     return null;
   }
 }
+
+// ---------- M6 审核日志 + 审核会话 ----------
+
+export type ReviewEvent =
+  | "prd_generated"
+  | "prd_edited"
+  | "prd_downloaded"
+  | "export_downloaded";
+
+/** 上报审核动作（fire-and-forget：日志失败不打断用户流程）。 */
+export function logReviewEvent(event: ReviewEvent, payload: Record<string, unknown>): void {
+  fetch(`${API_BASE}/api/review-log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, payload }),
+  }).catch(() => undefined);
+}
+
+export interface ReviewStats {
+  stage: "review_log";
+  status: string;
+  total_events: number;
+  prd_generated: number;
+  prd_edited: number;
+  prd_downloaded: number;
+  export_downloaded: number;
+  adoption_rate: number | null;
+}
+
+export async function fetchReviewStats(): Promise<ReviewStats> {
+  const res = await fetch(`${API_BASE}/api/review-log/stats`);
+  if (!res.ok) throw new Error(`统计获取失败：HTTP ${res.status}`);
+  return res.json();
+}
+
+/** 审核会话（Review → Export 的数据交接，持续保存可重复访问） */
+export interface ReviewSession {
+  savedAt: number;
+  sessionId: string;
+  productName: string;
+  aiDraft: string;
+  draft: string;
+  elapsed: number;
+  topics: PrdTopicInput[];
+  stats: PrdHandoff["stats"];
+}
+
+const SESSION_KEY = "echodesk:review-session";
+
+export function saveReviewSession(data: ReviewSession): void {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+}
+
+export function loadReviewSession(): ReviewSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? (JSON.parse(raw) as ReviewSession) : null;
+  } catch {
+    return null;
+  }
+}

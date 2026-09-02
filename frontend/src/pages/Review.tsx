@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { generatePrd, loadHandoff, type PrdHandoff } from "../api";
+import {
+  generatePrd,
+  loadHandoff,
+  logReviewEvent,
+  saveReviewSession,
+  type PrdHandoff,
+} from "../api";
 
 type Phase = "ready" | "generating" | "generated" | "error";
 
@@ -19,9 +25,28 @@ export default function ReviewPage() {
   const [aiDraft, setAiDraft] = useState(""); // AI 原稿（还原用）
   const [draft, setDraft] = useState(""); // 当前编辑内容
   const [elapsed, setElapsed] = useState(0);
+  // 审核会话：一次「生成→审核」周期一个 ID（采纳率去重键）；编辑事件只报一次
+  const [sessionId] = useState(() =>
+    `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const editLogged = useRef(false);
 
   const generating = phase === "generating";
   const edited = phase === "generated" && draft !== aiDraft;
+
+  function persistSession(nextDraft: string) {
+    if (!handoff) return;
+    saveReviewSession({
+      savedAt: Date.now(),
+      sessionId,
+      productName,
+      aiDraft,
+      draft: nextDraft,
+      elapsed,
+      topics: handoff.topics,
+      stats: handoff.stats,
+    });
+  }
 
   async function generate() {
     if (!handoff || generating) return;
@@ -37,15 +62,48 @@ export default function ReviewPage() {
       }
       setAiDraft(r.prd_markdown);
       setDraft(r.prd_markdown);
-      setElapsed(Math.round(performance.now() - t0));
+      const sec = Math.round(performance.now() - t0);
+      setElapsed(sec);
       setPhase("generated");
+      editLogged.current = false;
+      logReviewEvent("prd_generated", {
+        session_id: sessionId,
+        n_topics: handoff.topics.length,
+        total_feedback: handoff.topics.reduce((s, t) => s + t.size, 0),
+        elapsed_s: sec,
+        is_mock: r.is_mock ?? false,
+      });
+      saveReviewSession({
+        savedAt: Date.now(),
+        sessionId,
+        productName,
+        aiDraft: r.prd_markdown,
+        draft: r.prd_markdown,
+        elapsed: sec,
+        topics: handoff.topics,
+        stats: handoff.stats,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("error");
     }
   }
 
+  /** 编辑回调：持久化 + 首次编辑上报（后续编辑不再刷事件量） */
+  function onDraftChange(value: string) {
+    setDraft(value);
+    if (phase === "generated") {
+      if (!editLogged.current && value !== aiDraft) {
+        editLogged.current = true;
+        logReviewEvent("prd_edited", { session_id: sessionId });
+      }
+      persistSession(value);
+    }
+  }
+
   function download() {
+    logReviewEvent("prd_downloaded", { session_id: sessionId });
+    persistSession(draft);
     const blob = new Blob([draft], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -239,7 +297,7 @@ export default function ReviewPage() {
 
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onDraftChange(e.target.value)}
             rows={30}
             spellCheck={false}
             style={{

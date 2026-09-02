@@ -125,21 +125,19 @@ backend/   FastAPI + pydantic-settings
 
 - [指标与验证](docs/03-metrics.md)
 
-- [迭代与决策记录](docs/04-iteration-log.md)（7 个版本，含每次技术决策的备选方案与理由）
+- [迭代与决策记录](docs/04-iteration-log.md)（8 个版本，含每次技术决策的备选方案与理由）
 
 - [竞品分析](docs/05-competitive-analysis.md)
 
 ## 9. 路线图
 
-- **v0.6**：导出页（结构化 JSON/CSV）+ 审核日志（为"PRD 采纳率"指标积累数据）
-
-- **v0.7**：浏览器端 e2e 测试（Playwright）；Docker 镜像发布
+- **v0.7**：浏览器端 e2e 测试（Playwright，截图脚本已就位）；Docker 镜像发布
 
 - **v2 构想**：多轮反馈增量合并、需求去重与关联（跨批次）、Jira/飞书对接
 
 ## 10. 技术栈
 
-React 18 · TypeScript · Vite | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（37 tests）
+React 18 · TypeScript · Vite | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（46 tests）
 
 ***
 
