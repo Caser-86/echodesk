@@ -1,0 +1,27 @@
+:root {
+  color-scheme: light;
+  --surface: #ffffff;
+  --text: #171717;
+  --text-muted: #52525b;
+  --border: rgba(23, 23, 23, 0.12);
+  --brand: #4b3fe3;
+  --brand-soft: #f2f7ff;
+  font-family: "PingFang SC", "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: #fafafa;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+}
+
+/* 阶段：预览期轻量样式，UI 库（Tailwind/组件库）在 MVP 迭代中引入。 */

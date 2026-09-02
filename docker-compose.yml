@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: echodesk-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # 从宿主 .env 读取，未配置则使用默认 provider 设置
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai_compat}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+    volumes:
+      - echodesk-data:/app/data
+      - echodesk-uploads:/app/uploads
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: echodesk-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  echodesk-data:
+  echodesk-uploads:

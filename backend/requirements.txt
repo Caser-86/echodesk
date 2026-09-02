@@ -1,0 +1,31 @@
+# Web 框架
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# 配置与数据
+pydantic>=2.7
+pydantic-settings>=2.3
+python-dotenv>=1.0
+
+# HTTP 客户端（调用 LLM / Embedding API）
+httpx>=0.27
+
+# 数据存储
+sqlmodel>=0.0.22        # SQLite ORM，基于 SQLAlchemy + pydantic
+
+# 数据处理与聚类
+numpy>=2.0
+pandas>=2.2
+scikit-learn>=1.5       # KMeans 降级 / 向量工具
+umap-learn>=0.5         # 降维
+hdbscan>=0.8.33         # 密度聚类（主算法）
+sentence-transformers>=3.0   # 本地 embedding 备选（隐私模式）
+
+# CSV / Excel 解析
+python-multipart>=0.0.9
+openpyxl>=3.1
+chardet>=5.2            # 编码自动检测（中文 GBK）
+
+# 测试与质量
+pytest>=8.2
+ruff>=0.5
