@@ -25,7 +25,7 @@ async def main() -> None:
 
         # ---- 截图 1：洞察页分析结果（整页） ----
         await page.goto(f"{BASE}/insights")
-        await page.get_by_role("button", name="载入示例数据（60 条）").click()
+        await page.get_by_role("button", name="载入示例数据").click()
         await page.get_by_role("button", name="开始分析").click()
         # 等主题卡片渲染完成（聚类 + LLM 命名，真实链路约 60s）
         await page.get_by_text("代表原文").first.wait_for(state="visible")

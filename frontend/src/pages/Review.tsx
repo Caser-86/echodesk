@@ -7,25 +7,27 @@ import {
   saveReviewSession,
   type PrdHandoff,
 } from "../api";
+import { Alert, Badge, Button, Card, EmptyState, Skeleton, Stat } from "../components/ui";
+import DiffView from "../components/DiffView";
 
 type Phase = "ready" | "generating" | "generated" | "error";
+type ViewMode = "edit" | "diff";
 
-const SENTIMENT_LABEL: Record<string, { text: string; color: string }> = {
-  negative: { text: "负面", color: "#b91c1c" },
-  neutral: { text: "中性", color: "#a16207" },
-  positive: { text: "正面", color: "#15803d" },
+const SENTIMENT_BADGE: Record<string, { text: string; tone: "negative" | "neutral" | "positive" }> = {
+  negative: { text: "负面", tone: "negative" },
+  neutral: { text: "中性", tone: "neutral" },
+  positive: { text: "正面", tone: "positive" },
 };
 
 export default function ReviewPage() {
-  // handoff 只在挂载时读一次（洞察页每次进入会覆盖写入）
   const [handoff] = useState<PrdHandoff | null>(() => loadHandoff());
   const [productName, setProductName] = useState(handoff?.productName ?? "");
   const [phase, setPhase] = useState<Phase>("ready");
   const [error, setError] = useState("");
-  const [aiDraft, setAiDraft] = useState(""); // AI 原稿（还原用）
-  const [draft, setDraft] = useState(""); // 当前编辑内容
+  const [aiDraft, setAiDraft] = useState("");
+  const [draft, setDraft] = useState("");
   const [elapsed, setElapsed] = useState(0);
-  // 审核会话：一次「生成→审核」周期一个 ID（采纳率去重键）；编辑事件只报一次
+  const [viewMode, setViewMode] = useState<ViewMode>("edit");
   const [sessionId] = useState(() =>
     `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
   );
@@ -65,6 +67,7 @@ export default function ReviewPage() {
       const sec = Math.round(performance.now() - t0);
       setElapsed(sec);
       setPhase("generated");
+      setViewMode("edit");
       editLogged.current = false;
       logReviewEvent("prd_generated", {
         session_id: sessionId,
@@ -89,7 +92,6 @@ export default function ReviewPage() {
     }
   }
 
-  /** 编辑回调：持久化 + 首次编辑上报（后续编辑不再刷事件量） */
   function onDraftChange(value: string) {
     setDraft(value);
     if (phase === "generated") {
@@ -115,207 +117,177 @@ export default function ReviewPage() {
     URL.revokeObjectURL(url);
   }
 
-  // 无交接数据：引导回洞察页
   if (!handoff) {
     return (
-      <section style={{ maxWidth: 760, margin: "0 auto" }}>
-        <h2 style={{ marginTop: 0 }}>PRD 审核</h2>
-        <div
-          style={{
-            padding: 24,
-            border: "1px dashed var(--border)",
-            borderRadius: 10,
-            textAlign: "center",
-            color: "var(--text-muted)",
-          }}
-        >
+      <section className="container-narrow">
+        <h2 className="h2" style={{ marginTop: 0 }}>PRD 审核</h2>
+        <EmptyState icon="📝">
           暂无待审核的 PRD。请先在
           <Link to="/insights" style={{ color: "var(--brand)", margin: "0 4px" }}>
             洞察主题页
           </Link>
           勾选主题并点击「生成 PRD」。
-        </div>
+        </EmptyState>
       </section>
     );
   }
 
   return (
-    <section style={{ maxWidth: 960, margin: "0 auto" }}>
-      <h2 style={{ marginTop: 0 }}>PRD 审核</h2>
-      <p style={{ color: "var(--text-muted)" }}>
+    <section className="container">
+      <h2 className="h2" style={{ marginTop: 0 }}>PRD 审核</h2>
+      <p className="text-muted" style={{ marginTop: 4 }}>
         AI 基于勾选主题生成 PRD 草稿 → 人工审核编辑 → 导出。所有需求均标注来源主题，可回溯到原始反馈。
       </p>
 
       {/* 输入概览 */}
-      <div
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: 16,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <strong>输入概览</strong>
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {handoff.stats.total} 条反馈 · {handoff.stats.n_clusters} 个主题簇 · 方法{" "}
-            {handoff.stats.method.toUpperCase()} · 向量 {handoff.stats.embed_backend}
+      <Card className="mt-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="h3" style={{ margin: 0 }}>输入概览</h3>
+          <span className="text-sm text-muted">
+            {handoff.stats.total} 条反馈 · {handoff.stats.n_clusters} 个主题簇 · {handoff.stats.method.toUpperCase()} · {handoff.stats.embed_backend}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+
+        <div className="flex flex-wrap gap-2 mt-3">
           {handoff.topics.map((t) => {
-            const s = SENTIMENT_LABEL[t.sentiment] ?? SENTIMENT_LABEL.neutral;
+            const sb = SENTIMENT_BADGE[t.sentiment] ?? SENTIMENT_BADGE.neutral;
             return (
               <span
                 key={t.name}
                 style={{
-                  fontSize: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "var(--space-1)",
                   padding: "4px 10px",
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-full)",
                   border: "1px solid var(--border)",
-                  background: "#fff",
+                  background: "var(--surface)",
+                  fontSize: "var(--text-sm)",
                 }}
                 title={t.description}
               >
-                {t.name} · {t.size} 条 ·{" "}
-                <span style={{ color: s.color }}>{s.text}</span>
+                {t.name} · {t.size} 条 · <Badge tone={sb.tone}>{sb.text}</Badge>
               </span>
             );
           })}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
-          <label style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            产品名称：
+        <div className="flex items-center justify-between flex-wrap gap-3 mt-4" style={{ padding: "var(--space-3)", background: "var(--bg)", borderRadius: "var(--radius-md)" }}>
+          <label className="flex items-center gap-2 text-sm text-secondary">
+            产品名称
             <input
+              className="input"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              style={{
-                marginLeft: 6,
-                padding: "6px 10px",
-                width: 220,
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-              }}
+              style={{ width: 240 }}
+              placeholder="例如：EchoDesk 示例产品"
             />
           </label>
-          <button
-            onClick={generate}
-            disabled={generating}
-            style={{
-              marginLeft: "auto",
-              padding: "8px 22px",
-              border: "none",
-              borderRadius: 6,
-              background: generating ? "var(--text-muted)" : "var(--brand)",
-              color: "#fff",
-              fontWeight: 600,
-            }}
-          >
+          <Button variant="primary" onClick={generate} disabled={generating}>
             {generating ? "AI 生成中（约 1 分钟）…" : phase === "generated" ? "重新生成" : "生成 PRD 草稿"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      {/* 错误 */}
       {phase === "error" && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: "10px 14px",
-            borderRadius: 8,
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#b91c1c",
-            fontSize: 13,
-          }}
-        >
-          {error}
+        <div className="mt-4">
+          <Alert tone="danger">{error}</Alert>
         </div>
       )}
 
-      {/* 草稿审核区 */}
+      {generating && (
+        <Card className="mt-4">
+          <div className="flex items-center gap-3 text-sm text-muted mb-4">
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                border: "2px solid var(--border)",
+                borderTopColor: "var(--brand)",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+            AI 正在生成 PRD 草稿，包含需求背景、用户故事、功能规格、验收标准、风险与开放问题…
+          </div>
+          <div className="flex flex-col gap-3">
+            <Skeleton width="100%" height={18} />
+            <Skeleton width="92%" height={18} />
+            <Skeleton width="88%" height={18} />
+            <Skeleton width="95%" height={18} />
+          </div>
+        </Card>
+      )}
+
       {phase === "generated" && (
         <>
-          <div
-            style={{
-              marginTop: 14,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              fontSize: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ color: "var(--text-muted)" }}>
-              生成耗时 {(elapsed / 1000).toFixed(1)}s · {handoff.topics.length} 个主题 ·{" "}
-              {handoff.topics.reduce((s, t) => s + t.size, 0)} 条反馈
-            </span>
-            {edited ? (
-              <span
-                style={{ padding: "2px 8px", borderRadius: 4, background: "#fef3c7", color: "#92400e" }}
-              >
-                已人工修改（可「还原 AI 原稿」对比）
-              </span>
-            ) : (
-              <span
-                style={{ padding: "2px 8px", borderRadius: 4, background: "#dcfce7", color: "#166534" }}
-              >
-                AI 原稿，未修改
-              </span>
-            )}
-            {edited && (
-              <button
-                onClick={() => setDraft(aiDraft)}
-                style={{
-                  fontSize: 12,
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  background: "#fff",
-                  padding: "4px 10px",
-                }}
-              >
-                还原 AI 原稿
-              </button>
-            )}
-            <button
-              onClick={download}
-              style={{
-                marginLeft: "auto",
-                fontSize: 13,
-                border: "none",
-                borderRadius: 6,
-                background: "var(--brand)",
-                color: "#fff",
-                fontWeight: 600,
-                padding: "6px 16px",
-              }}
-            >
-              下载 Markdown
-            </button>
-          </div>
+          <Card className="mt-4" style={{ padding: "var(--space-3) var(--space-4)" }}>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Stat label="生成耗时" value={`${(elapsed / 1000).toFixed(1)}s`} />
+                <Stat label="主题" value={handoff.topics.length} />
+                <Stat label="覆盖反馈" value={handoff.topics.reduce((s, t) => s + t.size, 0)} />
+                {edited ? (
+                  <Badge tone="warning">已人工修改</Badge>
+                ) : (
+                  <Badge tone="success">AI 原稿未修改</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {edited && (
+                  <Button variant="secondary" size="sm" onClick={() => setDraft(aiDraft)}>
+                    还原 AI 原稿
+                  </Button>
+                )}
+                <Button variant="primary" size="sm" onClick={download}>
+                  下载 Markdown
+                </Button>
+              </div>
+            </div>
 
-          <textarea
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            rows={30}
-            spellCheck={false}
-            style={{
-              width: "100%",
-              marginTop: 10,
-              padding: 16,
-              fontFamily: "Consolas, Menlo, monospace",
-              fontSize: 13,
-              lineHeight: 1.7,
-              border: "1px solid var(--border)",
-              borderRadius: 10,
-              background: "#fff",
-              resize: "vertical",
-            }}
-          />
-          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            审核提示：重点核对「风险与开放问题」章节——那是 AI 明确列出需要 PM 决策的事项。
-          </p>
+            <div className="flex items-center gap-2 mt-3" style={{ borderTop: "1px solid var(--border)", paddingTop: "var(--space-3)" }}>
+              <span className="text-sm text-muted">视图：</span>
+              <button
+                className={`btn btn-sm ${viewMode === "edit" ? "btn-secondary" : "btn-ghost"}`}
+                onClick={() => setViewMode("edit")}
+              >
+                编辑模式
+              </button>
+              <button
+                className={`btn btn-sm ${viewMode === "diff" ? "btn-secondary" : "btn-ghost"}`}
+                onClick={() => setViewMode("diff")}
+              >
+                Diff 对比
+              </button>
+            </div>
+          </Card>
+
+          {viewMode === "edit" ? (
+            <Card className="mt-3">
+              <textarea
+                className="textarea"
+                value={draft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                rows={28}
+                spellCheck={false}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-sm)",
+                  lineHeight: 1.75,
+                  border: "none",
+                  boxShadow: "none",
+                  padding: 0,
+                }}
+              />
+              <p className="text-muted mt-3" style={{ fontSize: "var(--text-xs)" }}>
+                审核提示：重点核对「风险与开放问题」章节——那是 AI 明确列出需要 PM 决策的事项。
+              </p>
+            </Card>
+          ) : (
+            <div className="mt-3">
+              <DiffView before={aiDraft} after={draft} />
+            </div>
+          )}
         </>
       )}
     </section>

@@ -9,6 +9,15 @@ import {
   type ClusterResult,
   type Topic,
 } from "../api";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Skeleton,
+  Stat,
+  Stepper,
+} from "../components/ui";
 
 /** 内置演示数据：三主题 × 20 条（触发 UMAP+HDBSCAN 主链路） */
 const DEMO_TEXTS = [
@@ -47,25 +56,31 @@ const DEMO_TEXTS = [
   "客服让我自己去看帮助文档，但文档很旧", "投诉渠道也找不到，体验很差",
 ];
 
-const SENTIMENT_LABEL: Record<Topic["sentiment"], { text: string; color: string }> = {
-  negative: { text: "负面", color: "#b91c1c" },
-  neutral: { text: "中性", color: "#a16207" },
-  positive: { text: "正面", color: "#15803d" },
+const STEPS = [
+  { key: "clean", label: "清洗" },
+  { key: "embed", label: "向量化" },
+  { key: "cluster", label: "聚类" },
+  { key: "name", label: "命名" },
+];
+
+const SENTIMENT_BADGE: Record<Topic["sentiment"], { text: string; tone: "negative" | "neutral" | "positive" }> = {
+  negative: { text: "负面", tone: "negative" },
+  neutral: { text: "中性", tone: "neutral" },
+  positive: { text: "正面", tone: "positive" },
 };
 
 type Phase = "idle" | "cleaning" | "clustering" | "done" | "error";
 
 export default function InsightsPage() {
   const navigate = useNavigate();
-  // 导入页交接的数据一次性消费：预填文本区，刷新不重复导入
-  const [importedFrom] = useState(() => consumeImportHandoff());
+  const importedFrom = useMemo(() => consumeImportHandoff(), []);
   const [raw, setRaw] = useState(importedFrom ? importedFrom.texts.join("\n") : "");
   const [minSamples, setMinSamples] = useState(5);
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [clean, setClean] = useState<CleanResult | null>(null);
   const [cluster, setCluster] = useState<ClusterResult | null>(null);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [elapsed, setElapsed] = useState(0);
 
@@ -76,18 +91,24 @@ export default function InsightsPage() {
 
   const running = phase === "cleaning" || phase === "clustering";
 
+  const stepKey = phase === "cleaning" ? "clean" : phase === "clustering" ? "embed" : "done";
+  const doneKeys = phase === "done"
+    ? ["clean", "embed", "cluster", "name"]
+    : phase === "clustering"
+      ? ["clean"]
+      : [];
+
   async function analyze() {
     if (lines.length < 3 || running) return;
     setPhase("cleaning");
     setError("");
     setClean(null);
     setCluster(null);
-    setExpanded(null);
+    setExpanded(new Set());
     setSelected(new Set());
     const t0 = performance.now();
 
     try {
-      // 管线串联：清洗（去空/去重/脱敏）→ 聚类（embedding→降维→HDBSCAN→LLM 命名）
       const c = await cleanTexts(lines);
       setClean(c);
       if (!c.records.length) {
@@ -111,7 +132,6 @@ export default function InsightsPage() {
     }
   }
 
-  /** 勾选主题 → 组装 handoff（含成员原文样本）→ 跳审核页 */
   function goReview() {
     if (!cluster || !clean || selected.size === 0) return;
     const topics = cluster.topics
@@ -148,325 +168,246 @@ export default function InsightsPage() {
     });
   }
 
+  function toggleExpand(id: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const selectedFeedbackCount = cluster?.topics
+    .filter((t) => selected.has(t.cluster_id))
+    .reduce((s, t) => s + t.size, 0) ?? 0;
+
   return (
-    <section style={{ maxWidth: 960, margin: "0 auto" }}>
-      <h2 style={{ marginTop: 0 }}>洞察主题</h2>
-      <p style={{ color: "var(--text-muted)" }}>
-        粘贴用户反馈（每行一条）→ 自动清洗 → AI 聚类 → 主题命名与情感判断。
-      </p>
+    <section className="container">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="h2" style={{ marginTop: 0 }}>洞察主题</h2>
+          <p className="text-muted" style={{ marginTop: 4 }}>
+            粘贴用户反馈（每行一条）→ 自动清洗 → AI 聚类 → 主题命名与情感判断。
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setRaw(DEMO_TEXTS.join("\n"))} disabled={running}>
+            载入示例数据
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => { setRaw(""); setPhase("idle"); setClean(null); setCluster(null); }} disabled={running}>
+            清空
+          </Button>
+        </div>
+      </div>
 
       {importedFrom && (
-        <div
-          style={{
-            padding: "8px 14px",
-            borderRadius: 8,
-            background: "var(--brand-soft)",
-            border: "1px solid var(--border)",
-            fontSize: 13,
-            color: "var(--text-muted)",
-            marginBottom: 12,
-          }}
-        >
-          已载入导入文件「{importedFrom.filename}」的 {importedFrom.texts.length} 条文本，
-          可直接开始分析或在此编辑。
-        </div>
+        <Alert tone="info" className="mt-4">
+          已载入导入文件「{importedFrom.filename}」的 {importedFrom.texts.length} 条文本，可直接开始分析或在此编辑。
+        </Alert>
       )}
 
-      {/* 输入与参数 */}
-      <div
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: 16,
-        }}
-      >
-        <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <button
-            onClick={() => setRaw(DEMO_TEXTS.join("\n"))}
-            disabled={running}
-            style={{
-              padding: "6px 12px",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              background: "#fff",
-            }}
-          >
-            载入示例数据（60 条）
-          </button>
-          <button
-            onClick={() => { setRaw(""); setPhase("idle"); setClean(null); setCluster(null); }}
-            disabled={running}
-            style={{
-              padding: "6px 12px",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              background: "#fff",
-            }}
-          >
-            清空
-          </button>
-          <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--text-muted)" }}>
-            共 {lines.length} 条
-          </span>
-        </div>
-
+      <Card className="mt-4">
         <textarea
+          className="textarea"
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
-          rows={8}
+          rows={7}
           placeholder={"每行一条用户反馈，例如：\n登录页面加载很慢\n导出的表格是乱码"}
-          style={{
-            width: "100%",
-            padding: 10,
-            fontFamily: "inherit",
-            fontSize: 13,
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            resize: "vertical",
-            background: "#fff",
-          }}
+          disabled={running}
         />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10 }}>
-          <label style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            聚类敏感度 min_samples：
-            <input
-              type="number"
-              min={2}
-              max={20}
-              value={minSamples}
-              onChange={(e) => setMinSamples(Number(e.target.value) || 5)}
-              style={{ width: 60, marginLeft: 6, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 4 }}
-            />
-          </label>
-          <button
+        <div className="flex items-center justify-between flex-wrap gap-3 mt-4">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted">
+              聚类敏感度 min_samples
+              <input
+                type="number"
+                className="input"
+                min={2}
+                max={20}
+                value={minSamples}
+                onChange={(e) => setMinSamples(Number(e.target.value) || 5)}
+                disabled={running}
+                style={{ width: 70 }}
+              />
+            </label>
+            <span className="text-sm text-muted">共 {lines.length} 条</span>
+          </div>
+          <Button
+            variant="primary"
             onClick={analyze}
             disabled={running || lines.length < 3}
-            style={{
-              marginLeft: "auto",
-              padding: "8px 22px",
-              border: "none",
-              borderRadius: 6,
-              background: running ? "var(--text-muted)" : "var(--brand)",
-              color: "#fff",
-              fontWeight: 600,
-            }}
           >
             {phase === "cleaning" ? "清洗中…" : phase === "clustering" ? "聚类与命名中…" : "开始分析"}
-          </button>
+          </Button>
         </div>
 
         {lines.length > 0 && lines.length < 3 && (
-          <p style={{ fontSize: 12, color: "#b91c1c", margin: "8px 0 0" }}>
+          <Alert tone="warning" className="mt-3">
             至少需要 3 条反馈才能聚类。
-          </p>
+          </Alert>
         )}
-      </div>
+      </Card>
 
-      {/* 错误 */}
       {phase === "error" && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: "10px 14px",
-            borderRadius: 8,
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#b91c1c",
-            fontSize: 13,
-          }}
-        >
-          {error}
+        <div className="mt-4">
+          <Alert tone="danger">{error}</Alert>
         </div>
       )}
 
-      {/* 清洗报告 */}
-      {clean && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: "10px 14px",
-            borderRadius: 8,
-            background: "var(--brand-soft)",
-            border: "1px solid var(--border)",
-            fontSize: 13,
-            color: "var(--text-muted)",
-          }}
-        >
-          清洗完成：{clean.original_count} 条输入 → {clean.valid_count} 条有效
-          （去空 {clean.dropped_empty} · 去重 {clean.dropped_duplicate} · 截断 {clean.truncated} · 脱敏 {clean.masked}）
-        </div>
+      {(running || phase === "done") && (
+        <Card className="mt-4" style={{ padding: "var(--space-4)" }}>
+          <Stepper steps={STEPS} current={stepKey} doneKeys={doneKeys} />
+        </Card>
       )}
 
-      {/* 聚类统计 */}
-      {cluster && phase === "done" && (
-        <div
-          style={{
-            marginTop: 14,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
-            fontSize: 12,
-          }}
-        >
-          <Stat label="有效反馈" value={`${cluster.total}`} />
-          <Stat label="主题簇" value={`${cluster.n_clusters}`} />
-          <Stat label="噪声/未归类" value={`${cluster.noise_count}`} />
-          <Stat label="聚类方法" value={cluster.method.toUpperCase()} />
-          <Stat label="向量后端" value={cluster.embed_backend} />
-          <Stat label="耗时" value={`${(elapsed / 1000).toFixed(1)}s`} />
-          {cluster.llm.degraded && (
+      {running && (
+        <Card className="mt-4">
+          <div className="flex items-center gap-3 text-sm text-muted mb-4">
             <span
               style={{
-                alignSelf: "center",
-                padding: "2px 8px",
-                borderRadius: 4,
-                background: "#fef3c7",
-                color: "#92400e",
+                width: 16,
+                height: 16,
+                border: "2px solid var(--border)",
+                borderTopColor: "var(--brand)",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
               }}
-              title={cluster.llm.last_error}
-            >
-              LLM 已降级 mock（真实调用失败）
-            </span>
-          )}
-        </div>
+            />
+            {phase === "cleaning" ? "正在清洗：去空、去重、脱敏…" : "正在向量化与聚类：UMAP 降维 → HDBSCAN 密度聚类 → LLM 命名…"}
+          </div>
+          <div className="flex flex-col gap-3">
+            <Skeleton width="100%" height={64} />
+            <Skeleton width="85%" height={64} />
+            <Skeleton width="70%" height={64} />
+          </div>
+        </Card>
       )}
 
-      {/* 簇卡片 */}
-      {cluster?.topics.map((t) => {
-        const isOpen = expanded === t.cluster_id;
-        const isSel = selected.has(t.cluster_id);
-        const s = SENTIMENT_LABEL[t.sentiment];
-        return (
-          <div
-            key={t.cluster_id}
-            style={{
-              marginTop: 12,
-              background: "var(--surface)",
-              border: `1px solid ${isSel ? "var(--brand)" : "var(--border)"}`,
-              borderRadius: 10,
-              padding: "14px 16px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input
-                type="checkbox"
-                checked={isSel}
-                onChange={() => toggleSelect(t.cluster_id)}
-                title="纳入 PRD 生成（M5）"
-              />
-              <strong style={{ fontSize: 15 }}>{t.name}</strong>
-              <span
-                style={{
-                  fontSize: 12,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  background: `${s.color}1a`,
-                  color: s.color,
-                }}
-              >
-                {s.text}
-              </span>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t.size} 条</span>
-              <button
-                onClick={() => setExpanded(isOpen ? null : t.cluster_id)}
-                style={{
-                  marginLeft: "auto",
-                  fontSize: 12,
-                  border: "none",
-                  background: "none",
-                  color: "var(--brand)",
-                }}
-              >
-                {isOpen ? "收起原文 ▲" : `展开原文（${t.size}）▼`}
-              </button>
-            </div>
+      {clean && phase !== "error" && !running && (
+        <Alert tone="success" className="mt-4">
+          清洗完成：{clean.original_count} 条输入 → {clean.valid_count} 条有效
+          （去空 {clean.dropped_empty} · 去重 {clean.dropped_duplicate} · 截断 {clean.truncated} · 脱敏 {clean.masked}）
+        </Alert>
+      )}
 
-            <p style={{ margin: "8px 0 6px", fontSize: 13, color: "var(--text)" }}>
-              {t.description}
-            </p>
-
-            <div
-              style={{
-                fontSize: 13,
-                background: "#fafafa",
-                borderLeft: "3px solid var(--brand)",
-                padding: "6px 10px",
-                borderRadius: 4,
-                color: "var(--text-muted)",
-              }}
-            >
-              代表原文：「{t.representative}」
-            </div>
-
-            {isOpen && (
-              <ul style={{ margin: "10px 0 0", paddingLeft: 20, fontSize: 13 }}>
-                {t.member_indices.map((i) => (
-                  <li key={i} style={{ padding: "2px 0", color: "var(--text)" }}>
-                    {clean?.records[i]}
-                  </li>
-                ))}
-              </ul>
+      {cluster && phase === "done" && (
+        <>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <Stat label="有效反馈" value={cluster.total} />
+            <Stat label="主题簇" value={cluster.n_clusters} />
+            <Stat label="噪声/未归类" value={cluster.noise_count} />
+            <Stat label="聚类方法" value={cluster.method.toUpperCase()} />
+            <Stat label="向量后端" value={cluster.embed_backend} />
+            <Stat label="耗时" value={`${(elapsed / 1000).toFixed(1)}s`} />
+            {cluster.llm.degraded && (
+              <Badge tone="warning" title={cluster.llm.last_error}>LLM 已降级 mock</Badge>
             )}
           </div>
-        );
-      })}
 
-      {/* 已选主题 → M5 PRD 生成入口 */}
-      {selected.size > 0 && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: "12px 14px",
-            borderRadius: 8,
-            border: "1px dashed var(--brand)",
-            fontSize: 13,
-            color: "var(--brand)",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <span>
-            已勾选 {selected.size} 个主题（覆盖{" "}
-            {cluster?.topics
-              .filter((t) => selected.has(t.cluster_id))
-              .reduce((s, t) => s + t.size, 0)}{" "}
-            条反馈），可生成 PRD 草稿。
-          </span>
-          <button
-            onClick={goReview}
-            style={{
-              marginLeft: "auto",
-              padding: "6px 16px",
-              border: "none",
-              borderRadius: 6,
-              background: "var(--brand)",
-              color: "#fff",
-              fontWeight: 600,
-            }}
-          >
-            生成 PRD →
-          </button>
-        </div>
+          <div className="flex flex-col gap-3 mt-5">
+            {cluster.topics.map((t) => {
+              const isOpen = expanded.has(t.cluster_id);
+              const isSel = selected.has(t.cluster_id);
+              const sb = SENTIMENT_BADGE[t.sentiment];
+              return (
+                <Card
+                  key={t.cluster_id}
+                  hover
+                  style={{
+                    borderColor: isSel ? "var(--brand)" : undefined,
+                    boxShadow: isSel ? "0 0 0 1px var(--brand)" : undefined,
+                    padding: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{ padding: "var(--space-4)" }}>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSel}
+                        onChange={() => toggleSelect(t.cluster_id)}
+                        title="纳入 PRD 生成"
+                        style={{ marginTop: 4 }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="h3" style={{ margin: 0 }}>{t.name}</h3>
+                          <Badge tone={sb.tone}>{sb.text}</Badge>
+                          <Badge tone="brand">{t.size} 条反馈</Badge>
+                        </div>
+                        <p className="text-secondary mt-2" style={{ margin: 0 }}>
+                          {t.description}
+                        </p>
+
+                        <blockquote
+                          style={{
+                            margin: "var(--space-3) 0 0",
+                            padding: "var(--space-2) var(--space-3)",
+                            borderLeft: "3px solid var(--brand)",
+                            background: "var(--bg)",
+                            borderRadius: "0 var(--radius-md) var(--radius-md) 0",
+                            color: "var(--text-secondary)",
+                            fontSize: "var(--text-sm)",
+                          }}
+                        >
+                          代表原文：「{t.representative}」
+                        </blockquote>
+
+                        <div className="mt-3">
+                          <button
+                            onClick={() => toggleExpand(t.cluster_id)}
+                            className="btn btn-ghost btn-sm"
+                            style={{ paddingLeft: 0 }}
+                          >
+                            {isOpen ? "收起成员原文 ▲" : `展开全部 ${t.size} 条原文 ▼`}
+                          </button>
+                        </div>
+
+                        {isOpen && (
+                          <ul
+                            style={{
+                              margin: "var(--space-3) 0 0",
+                              paddingLeft: "var(--space-5)",
+                              fontSize: "var(--text-sm)",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            {t.member_indices.map((i) => (
+                              <li key={i} style={{ padding: "3px 0" }}>
+                                {clean?.records[i]}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {selected.size > 0 && (
+            <Card
+              className="mt-4"
+              style={{
+                border: "1px dashed var(--brand)",
+                background: "var(--brand-50)",
+              }}
+            >
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <span style={{ color: "var(--brand-600)", fontSize: "var(--text-sm)" }}>
+                  已勾选 <strong>{selected.size}</strong> 个主题，覆盖 <strong>{selectedFeedbackCount}</strong> 条反馈
+                </span>
+                <Button variant="primary" onClick={goReview}>
+                  生成 PRD →
+                </Button>
+              </div>
+            </Card>
+          )}
+        </>
       )}
     </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <span
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        padding: "6px 10px",
-      }}
-    >
-      <span style={{ color: "var(--text-muted)" }}>{label}</span>{" "}
-      <strong>{value}</strong>
-    </span>
   );
 }

@@ -7,6 +7,15 @@ import {
   type ReviewSession,
   type ReviewStats,
 } from "../api";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Skeleton,
+  Stat,
+} from "../components/ui";
 
 const SENTIMENT_LABEL: Record<string, string> = {
   negative: "负面",
@@ -24,7 +33,6 @@ function downloadBlob(content: string, filename: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-/** CSV 单元格转义：引号包裹 + 内部引号翻倍 */
 function csvCell(v: string): string {
   return `"${String(v ?? "").replace(/"/g, '""')}"`;
 }
@@ -52,10 +60,7 @@ export default function ExportPage() {
 
   function downloadInsightsJson() {
     if (!session) return;
-    logReviewEvent("export_downloaded", {
-      session_id: session.sessionId,
-      format: "json",
-    });
+    logReviewEvent("export_downloaded", { session_id: session.sessionId, format: "json" });
     const payload = {
       exported_at: new Date().toISOString(),
       product_name: session.productName,
@@ -85,27 +90,16 @@ export default function ExportPage() {
 
   function downloadTopicsCsv() {
     if (!session) return;
-    logReviewEvent("export_downloaded", {
-      session_id: session.sessionId,
-      format: "csv",
-    });
+    logReviewEvent("export_downloaded", { session_id: session.sessionId, format: "csv" });
     const header = ["簇ID", "主题名", "反馈量", "情感", "概述", "代表原文"];
     const lines = [header.map(csvCell).join(",")];
     session.topics.forEach((t, i) => {
       lines.push(
-        [
-          String(i + 1),
-          t.name,
-          String(t.size),
-          SENTIMENT_LABEL[t.sentiment] ?? t.sentiment,
-          t.description,
-          t.representative,
-        ]
+        [String(i + 1), t.name, String(t.size), SENTIMENT_LABEL[t.sentiment] ?? t.sentiment, t.description, t.representative]
           .map(csvCell)
           .join(","),
       );
     });
-    // BOM：保证 Excel 直接打开中文不乱码（与导入的 BOM 剥离对称）
     downloadBlob(
       "\ufeff" + lines.join("\r\n"),
       `topics-${(session.productName || "未命名产品").replace(/\s+/g, "_")}.csv`,
@@ -115,23 +109,15 @@ export default function ExportPage() {
 
   if (!session) {
     return (
-      <section style={{ maxWidth: 760, margin: "0 auto" }}>
-        <h2 style={{ marginTop: 0 }}>导出</h2>
-        <div
-          style={{
-            padding: 24,
-            border: "1px dashed var(--border)",
-            borderRadius: 10,
-            textAlign: "center",
-            color: "var(--text-muted)",
-          }}
-        >
+      <section className="container-narrow">
+        <h2 className="h2" style={{ marginTop: 0 }}>导出</h2>
+        <EmptyState icon="📦">
           暂无可导出的审核结果。请先在
           <Link to="/insights" style={{ color: "var(--brand)", margin: "0 4px" }}>
             洞察主题页
           </Link>
           生成 PRD 并审核。
-        </div>
+        </EmptyState>
       </section>
     );
   }
@@ -139,88 +125,98 @@ export default function ExportPage() {
   const humanEdited = session.draft !== session.aiDraft;
 
   return (
-    <section style={{ maxWidth: 960, margin: "0 auto" }}>
-      <h2 style={{ marginTop: 0 }}>导出</h2>
-      <p style={{ color: "var(--text-muted)" }}>
+    <section className="container">
+      <h2 className="h2" style={{ marginTop: 0 }}>导出</h2>
+      <p className="text-muted" style={{ marginTop: 4 }}>
         审核结果的结构化导出：PRD 正文、完整洞察（含主题样本与 AI 原稿对照）、主题清单表。
       </p>
 
-      {/* 会话概览 */}
-      <div
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: 16,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          fontSize: 13,
-        }}
-      >
-        <strong>{session.productName || "未命名产品"}</strong>
-        <span style={{ color: "var(--text-muted)" }}>
-          {session.stats.total} 条反馈 · {session.topics.length} 个主题 · 生成耗时{" "}
-          {(session.elapsed / 1000).toFixed(1)}s
-        </span>
-        <span
-          style={{
-            padding: "2px 8px",
-            borderRadius: 4,
-            background: humanEdited ? "#fef3c7" : "#dcfce7",
-            color: humanEdited ? "#92400e" : "#166534",
-          }}
-        >
-          {humanEdited ? "经人工修改" : "AI 原稿未修改"}
-        </span>
-      </div>
+      <Card className="mt-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <h3 className="h3" style={{ margin: 0 }}>{session.productName || "未命名产品"}</h3>
+            {humanEdited ? <Badge tone="warning">经人工修改</Badge> : <Badge tone="success">AI 原稿未修改</Badge>}
+          </div>
+          <div className="flex items-center gap-2">
+            <Stat label="反馈" value={session.stats.total} />
+            <Stat label="主题" value={session.topics.length} />
+            <Stat label="生成耗时" value={`${(session.elapsed / 1000).toFixed(1)}s`} />
+          </div>
+        </div>
+      </Card>
 
-      {/* 下载卡片 */}
       <div
+        className="mt-4"
         style={{
-          marginTop: 14,
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: "var(--space-3)",
         }}
       >
         <DownloadCard
+          icon="📝"
           title="PRD 正文（.md）"
           desc="人工审核后的最终 PRD，可直接入评审流程或导入文档工具。"
           action={downloadPrd}
         />
         <DownloadCard
+          icon="🗂️"
           title="完整洞察（.json）"
           desc="主题/情感/样本/AI 原稿与终稿对照 + 分析元信息，供二次处理或归档。"
           action={downloadInsightsJson}
         />
         <DownloadCard
+          icon="📊"
           title="主题清单（.csv）"
           desc="簇 ID/主题/反馈量/情感/概述/代表原文，Excel 直接打开（带 BOM）。"
           action={downloadTopicsCsv}
         />
       </div>
 
-      {/* 审核统计 */}
-      <div
-        style={{
-          marginTop: 20,
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: 16,
-        }}
-      >
-        <strong style={{ fontSize: 14 }}>审核日志统计</strong>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "6px 0 10px" }}>
-          「PRD 采纳率」= 下载过 PRD 的审核会话 / 有过生成的会话（本地累计，数据地基见
-          docs/03-metrics.md）。
-        </p>
+      <Card className="mt-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="h3" style={{ margin: 0 }}>审核日志统计</h3>
+            <p className="text-muted mt-1" style={{ fontSize: "var(--text-xs)" }}>
+              「PRD 采纳率」= 下载过 PRD 的审核会话 / 有过生成的会话
+            </p>
+          </div>
+          {stats && stats.adoption_rate != null && (
+            <div
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                background: `conic-gradient(var(--brand) ${stats.adoption_rate * 360}deg, var(--border) 0deg)`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: "var(--text-lg)",
+                color: "var(--brand-600)",
+              }}
+            >
+              <span
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  background: "var(--surface)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {(stats.adoption_rate * 100).toFixed(0)}%
+              </span>
+            </div>
+          )}
+        </div>
+
         {statsError ? (
-          <p style={{ fontSize: 13, color: "#b91c1c" }}>统计获取失败：{statsError}</p>
+          <Alert tone="danger" className="mt-4">统计获取失败：{statsError}</Alert>
         ) : stats ? (
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12 }}>
+          <div className="flex flex-wrap gap-2 mt-4">
             <Stat label="生成" value={`${stats.prd_generated} 次`} />
             <Stat label="人工修改" value={`${stats.prd_edited} 次`} />
             <Stat label="PRD 下载" value={`${stats.prd_downloaded} 次`} />
@@ -228,70 +224,41 @@ export default function ExportPage() {
             <Stat
               label="采纳率"
               value={stats.adoption_rate == null ? "暂无数据" : `${(stats.adoption_rate * 100).toFixed(0)}%`}
-              highlight
             />
           </div>
         ) : (
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>统计加载中…</p>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <Skeleton width={90} height={32} />
+            <Skeleton width={90} height={32} />
+            <Skeleton width={90} height={32} />
+          </div>
         )}
-      </div>
+      </Card>
     </section>
   );
 }
 
 function DownloadCard({
+  icon,
   title,
   desc,
   action,
 }: {
+  icon: string;
   title: string;
   desc: string;
   action: () => void;
 }) {
   return (
-    <div
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        padding: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
-    >
-      <strong style={{ fontSize: 14 }}>{title}</strong>
-      <span style={{ fontSize: 12, color: "var(--text-muted)", flex: 1 }}>{desc}</span>
-      <button
-        onClick={action}
-        style={{
-          padding: "8px 16px",
-          border: "none",
-          borderRadius: 6,
-          background: "var(--brand)",
-          color: "#fff",
-          fontWeight: 600,
-          alignSelf: "flex-start",
-        }}
-      >
+    <Card hover style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", padding: "var(--space-4)" }}>
+      <div style={{ fontSize: 32 }}>{icon}</div>
+      <div>
+        <h4 className="h3" style={{ margin: 0, fontSize: "var(--text-md)" }}>{title}</h4>
+        <p className="text-muted mt-1" style={{ fontSize: "var(--text-sm)", margin: 0 }}>{desc}</p>
+      </div>
+      <Button variant="primary" size="sm" onClick={action} style={{ alignSelf: "flex-start", marginTop: "auto" }}>
         下载
-      </button>
-    </div>
-  );
-}
-
-function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <span
-      style={{
-        background: highlight ? "var(--brand-soft)" : "#fff",
-        border: `1px solid ${highlight ? "var(--brand)" : "var(--border)"}`,
-        borderRadius: 8,
-        padding: "6px 10px",
-      }}
-    >
-      <span style={{ color: "var(--text-muted)" }}>{label}</span>{" "}
-      <strong style={highlight ? { color: "var(--brand)" } : undefined}>{value}</strong>
-    </span>
+      </Button>
+    </Card>
   );
 }
