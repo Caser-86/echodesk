@@ -259,7 +259,13 @@ export interface ReviewSession {
 const SESSION_KEY = "echodesk:review-session";
 
 export function saveReviewSession(data: ReviewSession): void {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch (e) {
+    // 配额满（QuotaExceededError）等写失败时静默降级：会话仍保留在当前页内存态，
+    // 只是刷新后不恢复；绝不让持久化失败打断审核/编辑流程。
+    console.warn("review session 持久化失败（localStorage 配额？）", e);
+  }
 }
 
 export function loadReviewSession(): ReviewSession | null {

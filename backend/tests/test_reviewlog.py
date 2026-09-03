@@ -34,6 +34,25 @@ class TestAppendAndRead:
     def test_missing_file_reads_empty(self, isolated_log):
         assert rl.read_events() == []
 
+    def test_concurrent_append_no_corrupt_lines(self, isolated_log):
+        """多线程并发追加写不产生坏行（有锁串行化），读回数量与事件数一致。"""
+        import threading
+
+        N = 40
+        threads = [
+            threading.Thread(
+                target=lambda: rl.append_event("prd_edited", {"session_id": f"s{i}"})
+            )
+            for i in range(N)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        events = rl.read_events()
+        assert len(events) == N  # 无坏行被静默丢弃
+
     def test_corrupt_line_skipped(self, isolated_log):
         isolated_log.parent.mkdir(parents=True, exist_ok=True)
         isolated_log.write_text(

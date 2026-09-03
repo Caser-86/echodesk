@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,10 @@ from typing import Any
 LOG_PATH = Path(__file__).resolve().parents[2] / "data" / "review_log.jsonl"
 
 EVENT_TYPES = {"prd_generated", "prd_edited", "prd_downloaded", "export_downloaded"}
+
+# 追加写用进程级锁串行化：前端会并发上报生成/编辑/下载事件，
+# 无锁时两个 open(...,"a") 的写可能交错，产生坏行被 read_events 静默丢弃（低估统计）。
+_append_lock = threading.Lock()
 
 
 def append_event(event: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -30,8 +35,9 @@ def append_event(event: str, payload: dict[str, Any] | None = None) -> dict[str,
         "payload": payload or {},
     }
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with LOG_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    with _append_lock:
+        with LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
 
 

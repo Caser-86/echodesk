@@ -35,6 +35,19 @@ def test_clean_rejects_non_list_texts():
     assert "数组" in data["message"]
 
 
+def test_clean_rejects_over_limit_texts():
+    """输入条数超过 max_rows 上限时拒绝，防止超大请求拖垮单进程。"""
+    from app.core.config import get_settings
+
+    resp = client.post(
+        "/api/pipeline/clean", json={"texts": ["x"] * (get_settings().max_rows + 1)}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "上限" in data["message"]
+
+
 def test_cluster_endpoint():
     texts = ["登录很慢", "登录失败", "导出乱码", "导出格式不对", "客服不回复", "客服排队久"]
     resp = client.post("/api/pipeline/cluster", json={"texts": texts, "min_samples": 2})
@@ -60,6 +73,19 @@ def test_cluster_rejects_non_list_texts():
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "error"
+
+
+def test_cluster_rejects_over_limit_texts():
+    """输入条数超过 max_rows 上限时拒绝（聚类全量 embedding/降维，需防拖垮）。"""
+    from app.core.config import get_settings
+
+    resp = client.post(
+        "/api/pipeline/cluster", json={"texts": ["x"] * (get_settings().max_rows + 1)}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "上限" in data["message"]
 
 
 def test_prd_gen_endpoint():

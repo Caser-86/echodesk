@@ -73,6 +73,27 @@ describe("localStorage handoff helpers", () => {
     saveReviewSession(data);
     expect(loadReviewSession()).toEqual(data);
   });
+
+  it("saveReviewSession swallows quota errors (does not throw)", () => {
+    // 模拟 localStorage 配额写满：setItem 抛 QuotaExceededError
+    const quotaStorage = mockStorage();
+    vi.stubGlobal("localStorage", {
+      ...quotaStorage,
+      setItem: () => { throw new DOMException("quota", "QuotaExceededError"); },
+    });
+    const data = {
+      savedAt: 3,
+      sessionId: "s-1",
+      productName: "P",
+      aiDraft: "draft",
+      draft: "edited",
+      elapsed: 10,
+      topics: [],
+      stats: { total: 1, n_clusters: 1, noise_count: 0, method: "hdbscan", embed_backend: "local" },
+    };
+    // 不应抛出，也不应中断流程
+    expect(() => saveReviewSession(data)).not.toThrow();
+  });
 });
 
 describe("usePingBackend", () => {

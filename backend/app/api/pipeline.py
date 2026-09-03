@@ -68,8 +68,17 @@ async def clean_feedback(body: dict | None = None) -> dict:
     from app.services.clean import CleanOptions, clean_records
 
     texts = (body or {}).get("texts", [])
-    if not isinstance(texts, list):
+    if not isinstance(texts, list) or not texts:
         return {"stage": "clean", "status": "error", "message": "texts 需为数组"}
+
+    # 输入条数上限复用 max_rows：防止超大请求拖垮单进程 embedding/聚类
+    max_rows = get_settings().max_rows
+    if len(texts) > max_rows:
+        return {
+            "stage": "clean",
+            "status": "error",
+            "message": f"texts 超过 {max_rows} 条上限，请分批或压缩后重试",
+        }
 
     max_len = int((body or {}).get("max_len", get_settings().max_text_len))
     result = clean_records(texts, CleanOptions(max_len=max_len))
@@ -95,6 +104,7 @@ async def cluster_feedback(body: dict | None = None) -> dict:
     body: {"texts": [str, ...], "min_samples": 5}
     返回：每簇的名称/描述/情感/代表原文/成员索引，及噪声统计。
     """
+    from app.core.config import get_settings
     from app.core.llm import get_llm_status
     from app.services.cluster import cluster_texts
     from app.services.insight import analyze_clusters
@@ -102,6 +112,15 @@ async def cluster_feedback(body: dict | None = None) -> dict:
     texts = (body or {}).get("texts", [])
     if not isinstance(texts, list) or not texts:
         return {"stage": "cluster", "status": "error", "message": "texts 需为非空数组"}
+
+    # 输入条数上限复用 max_rows：聚类全量 embedding/降维，超大请求会拖垮单进程
+    max_rows = get_settings().max_rows
+    if len(texts) > max_rows:
+        return {
+            "stage": "cluster",
+            "status": "error",
+            "message": f"texts 超过 {max_rows} 条上限，请分批或压缩后重试",
+        }
 
     min_samples = (body or {}).get("min_samples")
     outcome = await cluster_texts(texts, min_samples=int(min_samples) if min_samples else None)
