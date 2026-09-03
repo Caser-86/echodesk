@@ -8,6 +8,9 @@ services:
       - "8000:8000"
     environment:
       # 从宿主 .env 读取，未配置则使用默认 provider 设置
+      # 无 key 时 LLM_MODE 自动回退 mock（auto=无 key 自动 mock），离线可演示
+      - LLM_MODE=${LLM_MODE:-auto}
+      - LLM_FALLBACK_MOCK=${LLM_FALLBACK_MOCK:-true}
       - LLM_PROVIDER=${LLM_PROVIDER:-openai_compat}
       - LLM_MODEL=${LLM_MODEL:-}
       - LLM_BASE_URL=${LLM_BASE_URL:-}

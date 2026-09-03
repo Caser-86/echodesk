@@ -108,6 +108,19 @@ npm run dev                                        # http://localhost:5173
 
 - 首次运行本地向量模式会下载 bge-small-zh 模型（约 100MB）；无网环境自动降级 TF-IDF
 
+### 6.1 一键 Docker 运行（推荐给面试官 30 秒观感）
+
+```bash
+docker compose up --build
+# 前端 http://localhost:5173 ，后端 http://localhost:8000
+```
+
+- 无需在本机装 Python/Node/模型：前端 Nginx 托管静态资源并反代 `/api`，后端容器内自带全部依赖
+- 无 LLM key 时容器默认 `LLM_MODE=auto`，自动回退 mock，离线即可演示全流程
+- 数据与上传会落到命名卷 `echodesk-data` / `echodesk-uploads`，重启不丢失
+
+> Docker 与本地两种跑法产物一致；`docker compose up` 首次需拉取镜像并下载本地向量模型（约 100MB）。
+
 ## 7. 技术架构
 
 ```
@@ -144,7 +157,7 @@ backend/   FastAPI + pydantic-settings
 
 - **v0.7 ✅**：响应式布局、暗色模式、前后端单元测试补全
 
-- **v0.8**：GitHub Actions CI；浏览器端 e2e 测试（Playwright，截图脚本已就位）；Docker 镜像发布
+- **v0.8 ✅**：GitHub Actions CI；Docker Compose 一键运行；浏览器端 e2e 测试（Playwright，`E2E=1` 显式触发，截图脚本复用）
 
 - **v2 构想**：多轮反馈增量合并、需求去重与关联（跨批次）、Jira/飞书对接
 
