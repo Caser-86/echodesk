@@ -165,11 +165,13 @@ backend/   FastAPI + pydantic-settings
 
 - **v0.8 ✅**：GitHub Actions CI；Docker Compose 一键运行；浏览器端 e2e 测试（Playwright，`E2E=1` 显式触发，截图脚本复用）
 
+- **v1.1 ✅**：用户故事卡任务拆解；浏览器本地处理历史；审核 JSONL 日志自动归档；版本标识统一为 `1.1.0`
+
 - **v2 构想**：多轮反馈增量合并、需求去重与关联（跨批次）、Jira/飞书对接
 
 ## 10. 技术栈
 
-React 18 · TypeScript · Vite · Vitest · React Testing Library（35 tests） | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（78 tests）
+React 18 · TypeScript · Vite · Vitest · React Testing Library（37 tests） | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（83 tests）
 
 ***
 

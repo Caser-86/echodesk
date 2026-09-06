@@ -13,6 +13,7 @@ def test_health():
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
+    assert data["version"] == "1.1.0"
 
 
 def test_clean_endpoint():
@@ -110,6 +111,37 @@ def test_prd_gen_endpoint():
 
 def test_prd_gen_rejects_empty_topics():
     resp = client.post("/api/pipeline/prd-gen", json={"product_name": "Test", "topics": []})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "error"
+
+
+def test_task_cards_endpoint_returns_traceable_cards():
+    topics = [
+        {
+            "name": "登录问题",
+            "description": "用户无法正常登录",
+            "sentiment": "negative",
+            "size": 5,
+            "representative": "登录一直失败",
+            "samples": ["登录失败", "密码错误"],
+        }
+    ]
+    resp = client.post(
+        "/api/pipeline/task-cards",
+        json={"product_name": "Test", "topics": topics},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["stage"] == "task_decompose"
+    assert data["status"] == "ok"
+    assert data["total"] == 1
+    assert data["task_cards"][0]["source_topic"] == "登录问题"
+    assert len(data["task_cards"][0]["acceptance_criteria"]) >= 3
+
+
+def test_task_cards_rejects_empty_topics():
+    resp = client.post("/api/pipeline/task-cards", json={"topics": []})
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "error"

@@ -64,6 +64,22 @@ class TestAppendAndRead:
         )
         assert len(rl.read_events()) == 2
 
+    def test_append_rotates_oversized_log_and_keeps_history(self, isolated_log, monkeypatch):
+        """超过大小上限时归档旧文件，统计读取仍包含归档事件。"""
+        from types import SimpleNamespace
+
+        isolated_log.parent.mkdir(parents=True, exist_ok=True)
+        isolated_log.write_text("旧事件\n" + ("x" * 200), encoding="utf-8")
+        monkeypatch.setattr(rl, "get_settings", lambda: SimpleNamespace(review_log_max_bytes=20))
+
+        rl.append_event("prd_generated", {"session_id": "s-new"})
+
+        archives = list(isolated_log.parent.glob("review_log.*.jsonl"))
+        assert len(archives) == 1
+        assert "旧事件" in archives[0].read_text(encoding="utf-8")
+        events = rl.read_events()
+        assert any(event.get("payload", {}).get("session_id") == "s-new" for event in events)
+
 
 class TestComputeStats:
     def test_empty(self):

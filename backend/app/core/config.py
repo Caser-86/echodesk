@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # backend/
+APP_VERSION = "1.1.0"
 
 
 class Settings(BaseSettings):
@@ -41,6 +42,9 @@ class Settings(BaseSettings):
     max_rows: int = 5000
     max_text_len: int = 500
     cluster_min_samples: int = 5
+
+    # 审核日志：达到上限后自动归档，避免单个 JSONL 无限增长
+    review_log_max_bytes: int = 10 * 1024 * 1024
 
     def ensure_dirs(self) -> None:
         for d in (self.data_dir, self.uploads_dir, self.vector_cache_dir):

@@ -4,6 +4,7 @@ import ImportPage from "./pages/Import";
 import InsightsPage from "./pages/Insights";
 import ReviewPage from "./pages/Review";
 import ExportPage from "./pages/Export";
+import HistoryPage from "./pages/History";
 import { usePingBackend } from "./api";
 import { useTheme } from "./hooks/useTheme";
 
@@ -12,6 +13,7 @@ const navItems = [
   { to: "/insights", label: "洞察主题" },
   { to: "/review", label: "PRD 审核" },
   { to: "/export", label: "导出" },
+  { to: "/history", label: "历史记录" },
 ];
 
 function ThemeToggle({ theme, onToggle }: { theme: string; onToggle: () => void }) {
@@ -120,6 +122,7 @@ export default function App() {
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/export" element={<ExportPage />} />
+          <Route path="/history" element={<HistoryPage />} />
         </Routes>
       </main>
     </div>

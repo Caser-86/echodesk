@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.core.config import get_settings
+from app.core.config import APP_VERSION, get_settings
 from app.core.llm import get_llm_status
 
 router = APIRouter(tags=["system"])
@@ -14,7 +14,7 @@ def health() -> dict:
     status = get_llm_status()
     return {
         "status": "ok",
-        "version": "0.1.0",
+        "version": APP_VERSION,
         # llm_mode: live=首选真实 / mock=离线；degraded=true 表示真实调用已被降级
         **status,
         "llm_provider": settings.llm_provider,

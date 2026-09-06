@@ -15,7 +15,7 @@
 - 本地开发后端使用 8001，Docker 宿主端口使用 8003，容器内部端口保持 8000。
 - 演示数据必须明确标注为合成脱敏数据，不冒充真实客户数据。
 - 保留 `.playwright-cli/` 中已有截图与下载产物，不删除用户可用的演示材料；通过 `.gitignore` 排除它们。
-- 不实现 S2/S3 或 v2 功能；本次只完成发布收尾与正式 demo 数据整理。
+- 本计划只覆盖 v1.0 发布收尾与正式 demo 数据整理；S2/S3 后续实现记录在 `docs/04-iteration-log.md` 的 v1.1.0 条目中。
 - 推送前必须通过后端测试、前端测试、前端构建和 Docker Compose 配置校验。
 
 ---
@@ -125,7 +125,7 @@
 - 创建并推送 annotated tag `v1.0.0`，指向发布提交。
 
 - [x] **Step 1: 查看 diff 并运行 `git diff --check`**
-- [ ] **Step 2: 提交发布收尾改动**
-- [ ] **Step 3: 推送 `main` 到 GitHub**
-- [ ] **Step 4: 创建并推送 `v1.0.0` 标签**
-- [ ] **Step 5: 用 `git ls-remote` 验证远程分支和 tag**
+- [x] **Step 2: 提交发布收尾改动**
+- [x] **Step 3: 推送 `main` 到 GitHub**
+- [x] **Step 4: 创建并推送 `v1.0.0` 标签**
+- [x] **Step 5: 用 `git ls-remote` 验证远程分支和 tag**

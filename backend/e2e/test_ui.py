@@ -77,3 +77,19 @@ class TestInsightsPipeline:
         # 统计面板（PRD 采纳率环形图区域）
         page.get_by_text("审核日志统计").first.wait_for(state="visible")
         assert page.get_by_text("审核日志统计").count() >= 1
+
+    def test_generate_task_cards(self, page):
+        """生成 S2 用户故事卡，验证验收标准和来源证据渲染。"""
+        page.goto(f"{BASE}/review")
+        page.get_by_role("button", name="生成用户故事卡").click()
+        page.get_by_text("US-001").first.wait_for(state="visible")
+        assert page.get_by_text("验收标准").count() >= 1
+        assert page.get_by_text("来源：").count() >= 1
+
+    def test_history_reopens_review_with_task_cards(self, page):
+        """S3 历史页可回看会话，并恢复已生成的任务卡。"""
+        page.get_by_role("link", name="历史记录").click()
+        page.get_by_role("button", name="打开审核").first.wait_for(state="visible")
+        page.get_by_role("button", name="打开审核").first.click()
+        page.get_by_text("S2 · 用户故事卡").wait_for(state="visible")
+        assert page.get_by_text("US-001").count() >= 1

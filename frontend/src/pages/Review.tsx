@@ -2,9 +2,12 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   generatePrd,
+  generateTaskCards,
   loadHandoff,
+  loadReviewSession,
   logReviewEvent,
   saveReviewSession,
+  type TaskCard,
   type PrdHandoff,
 } from "../api";
 import { Alert, Badge, Button, Card, EmptyState, Skeleton, Stat } from "../components/ui";
@@ -12,6 +15,7 @@ import DiffView from "../components/DiffView";
 
 type Phase = "ready" | "generating" | "generated" | "error";
 type ViewMode = "edit" | "diff";
+type TaskPhase = "idle" | "generating" | "generated" | "error";
 
 const SENTIMENT_BADGE: Record<string, { text: string; tone: "negative" | "neutral" | "positive" }> = {
   negative: { text: "负面", tone: "negative" },
@@ -19,21 +23,49 @@ const SENTIMENT_BADGE: Record<string, { text: string; tone: "negative" | "neutra
   positive: { text: "正面", tone: "positive" },
 };
 
+function downloadTaskCards(cards: TaskCard[], productName: string) {
+  const markdown = cards
+    .map(
+      (card) =>
+        `## ${card.id} · ${card.title} [${card.priority}]\n\n` +
+        `**用户故事**：${card.user_story}\n\n` +
+        `**说明**：${card.description}\n\n` +
+        `**验收标准**：\n${card.acceptance_criteria.map((item) => `- ${item}`).join("\n")}\n\n` +
+        `**来源**：${card.source_topic}（${card.feedback_count} 条）\n> ${card.evidence}`,
+    )
+    .join("\n\n---\n\n");
+  const blob = new Blob([`# ${productName || "未命名产品"} · 用户故事卡\n\n${markdown}`], {
+    type: "text/markdown;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `task-cards-${(productName || "未命名产品").replace(/\s+/g, "_")}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ReviewPage() {
   const [handoff] = useState<PrdHandoff | null>(() => loadHandoff());
-  const [productName, setProductName] = useState(handoff?.productName ?? "");
-  const [phase, setPhase] = useState<Phase>("ready");
+  const [savedSession] = useState(() => loadReviewSession());
+  const restoredSession = savedSession && handoff && savedSession.savedAt >= handoff.savedAt ? savedSession : null;
+  const [productName, setProductName] = useState(restoredSession?.productName ?? handoff?.productName ?? "");
+  const [phase, setPhase] = useState<Phase>(restoredSession ? "generated" : "ready");
   const [error, setError] = useState("");
-  const [aiDraft, setAiDraft] = useState("");
-  const [draft, setDraft] = useState("");
-  const [elapsed, setElapsed] = useState(0);
+  const [aiDraft, setAiDraft] = useState(restoredSession?.aiDraft ?? "");
+  const [draft, setDraft] = useState(restoredSession?.draft ?? "");
+  const [elapsed, setElapsed] = useState(restoredSession?.elapsed ?? 0);
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
+  const [taskPhase, setTaskPhase] = useState<TaskPhase>(restoredSession?.taskCards?.length ? "generated" : "idle");
+  const [taskCards, setTaskCards] = useState<TaskCard[]>(restoredSession?.taskCards ?? []);
+  const [taskError, setTaskError] = useState("");
   const [sessionId] = useState(() =>
-    `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    restoredSession?.sessionId ?? `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
   );
   const editLogged = useRef(false);
 
   const generating = phase === "generating";
+  const taskGenerating = taskPhase === "generating";
   const edited = phase === "generated" && draft !== aiDraft;
 
   function persistSession(nextDraft: string) {
@@ -47,12 +79,15 @@ export default function ReviewPage() {
       elapsed,
       topics: handoff.topics,
       stats: handoff.stats,
+      taskCards,
     });
   }
 
   async function generate() {
     if (!handoff || generating) return;
     setPhase("generating");
+    setTaskPhase("idle");
+    setTaskCards([]);
     setError("");
     const t0 = performance.now();
     try {
@@ -85,10 +120,41 @@ export default function ReviewPage() {
         elapsed: sec,
         topics: handoff.topics,
         stats: handoff.stats,
+        taskCards: [],
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("error");
+    }
+  }
+
+  async function generateTasks() {
+    if (!handoff || taskGenerating) return;
+    setTaskPhase("generating");
+    setTaskError("");
+    try {
+      const result = await generateTaskCards(productName, handoff.topics);
+      if (result.status !== "ok" || !result.task_cards) {
+        setTaskError(result.message ?? "任务拆解失败");
+        setTaskPhase("error");
+        return;
+      }
+      setTaskCards(result.task_cards);
+      setTaskPhase("generated");
+      saveReviewSession({
+        savedAt: Date.now(),
+        sessionId,
+        productName,
+        aiDraft,
+        draft,
+        elapsed,
+        topics: handoff.topics,
+        stats: handoff.stats,
+        taskCards: result.task_cards,
+      });
+    } catch (e) {
+      setTaskError(e instanceof Error ? e.message : String(e));
+      setTaskPhase("error");
     }
   }
 
@@ -288,6 +354,53 @@ export default function ReviewPage() {
               <DiffView before={aiDraft} after={draft} />
             </div>
           )}
+
+          <Card className="mt-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h3 className="h3" style={{ margin: 0 }}>S2 · 用户故事卡</h3>
+                <p className="text-muted mt-1" style={{ fontSize: "var(--text-sm)" }}>
+                  把主题洞察拆成可进入评审和排期的任务，保留原始反馈证据链。
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {taskPhase === "generated" && (
+                  <Button variant="secondary" size="sm" onClick={() => downloadTaskCards(taskCards, productName)}>
+                    下载任务卡
+                  </Button>
+                )}
+                <Button variant="primary" size="sm" onClick={generateTasks} disabled={taskGenerating}>
+                  {taskGenerating ? "拆解中…" : taskPhase === "generated" ? "重新拆解" : "生成用户故事卡"}
+                </Button>
+              </div>
+            </div>
+
+            {taskPhase === "error" && <Alert tone="danger" className="mt-3">{taskError}</Alert>}
+            {taskPhase === "generated" && (
+              <div
+                className="mt-4"
+                style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "var(--space-3)" }}
+              >
+                {taskCards.map((card) => (
+                  <div key={card.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "var(--space-4)", background: "var(--bg)" }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-mono" style={{ color: "var(--brand)" }}>{card.id}</span>
+                      <Badge tone={card.priority === "P0" ? "negative" : card.priority === "P1" ? "warning" : "neutral"}>{card.priority}</Badge>
+                    </div>
+                    <h4 className="h3 mt-3" style={{ marginBottom: 0 }}>{card.title}</h4>
+                    <p className="text-secondary mt-2" style={{ fontSize: "var(--text-sm)" }}>{card.user_story}</p>
+                    <strong className="text-sm">验收标准</strong>
+                    <ul className="text-sm" style={{ paddingLeft: 20, marginTop: 8 }}>
+                      {card.acceptance_criteria.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                    <p className="text-muted mt-3" style={{ fontSize: "var(--text-xs)", marginBottom: 0 }}>
+                      来源：{card.source_topic} · {card.feedback_count} 条 · “{card.evidence}”
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </>
       )}
     </section>

@@ -274,7 +274,7 @@
 | 降维        | UMAP（n≥50 触发，否则直连聚类）                                             | 小样本跳过降维避免失真                        |
 | 聚类        | HDBSCAN（主）/ KMeans（降级）/ 单条与全重复走 quick 路径                              | 无需预设 K、对噪声鲁棒；多级降级保证可用            |
 | LLM       | OpenAI 兼容接口，抽象 Provider 层（火山方舟 glm-5-3-flash 实测；Coding Plan 端点 /api/plan/v3） | 国产模型成本低；Provider + Fallback 熔断展示工程素养 |
-| 存储        | 审核日志 JSONL 追加文件（无 schema、零锁）+ localStorage 会话交接                     | MVP 单机够用；升级 DB 时 JSONL 可直接迁移（见 v0.6） |
+| 存储        | 审核日志 JSONL 追加文件（无 schema、进程级锁、按大小轮转）+ localStorage 会话交接 | MVP 单机够用；升级 DB 时 JSONL 可直接迁移（见 v0.6） |
 | 部署        | Docker Compose 一键本地运行；演示视频 + 在线 Demo（Railway/Render 免费 tier，可选）      | 本地优先保隐私；在线 Demo 方便面试官 30 秒体验     |
 
 ### 6.2 系统架构
@@ -482,6 +482,10 @@ echodesk/                       # 或 insightforge/
 - [x] 演示数据集（内置 60 条三主题示例数据，一键加载）
 
 - [x] 正式演示数据文件（`data/demo/flowdesk_feedback.csv` + `SOURCE.md`，含字段说明与演示话术）
+
+- [x] S2 任务拆解（主题 → 用户故事卡、验收标准、优先级与来源证据）
+
+- [x] S3 处理历史（浏览器本地保存、回看与删除，最多 12 条）
 
 - [x] docs/ 五份文档齐全（见各文档状态；用户调研见诚实降级说明）
 

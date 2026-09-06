@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import health, pipeline, reviewlog
-from app.core.config import get_settings
+from app.core.config import APP_VERSION, get_settings
 
 
 def create_app() -> FastAPI:
@@ -17,7 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="EchoDesk API",
         description="AI 需求工作台后端：反馈导入 → 清洗 → 聚类 → 洞察 → PRD 草稿 → 人工审核 → 导出",
-        version="0.1.0",
+        version=APP_VERSION,
     )
 
     # 开发期允许前端(5173)跨域调用；生产由反向代理收敛

@@ -181,6 +181,44 @@ export async function generatePrd(
   return res.json();
 }
 
+// ---------- S2 任务拆解 ----------
+
+export interface TaskCard {
+  id: string;
+  product_name: string;
+  title: string;
+  user_story: string;
+  description: string;
+  acceptance_criteria: string[];
+  priority: "P0" | "P1" | "P2";
+  source_topic: string;
+  feedback_count: number;
+  evidence: string;
+}
+
+export interface TaskCardsResult {
+  stage: "task_decompose";
+  status: string;
+  product_name?: string;
+  total?: number;
+  task_cards?: TaskCard[];
+  message?: string;
+}
+
+/** S2 任务拆解：主题洞察 → 可追溯用户故事卡。 */
+export async function generateTaskCards(
+  productName: string,
+  topics: PrdTopicInput[],
+): Promise<TaskCardsResult> {
+  const res = await fetch(`${API_BASE}/api/pipeline/task-cards`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ product_name: productName, topics }),
+  });
+  if (!res.ok) throw new Error(`任务拆解失败：HTTP ${res.status}`);
+  return res.json();
+}
+
 /** 洞察页 → 审核页的数据交接（localStorage） */
 export interface PrdHandoff {
   savedAt: number;
@@ -254,9 +292,12 @@ export interface ReviewSession {
   elapsed: number;
   topics: PrdTopicInput[];
   stats: PrdHandoff["stats"];
+  taskCards?: TaskCard[];
 }
 
 const SESSION_KEY = "echodesk:review-session";
+const HISTORY_KEY = "echodesk:review-history";
+const MAX_HISTORY_SESSIONS = 12;
 
 export function saveReviewSession(data: ReviewSession): void {
   try {
@@ -266,6 +307,14 @@ export function saveReviewSession(data: ReviewSession): void {
     // 只是刷新后不恢复；绝不让持久化失败打断审核/编辑流程。
     console.warn("review session 持久化失败（localStorage 配额？）", e);
   }
+  try {
+    const history = listReviewSessions().filter((item) => item.sessionId !== data.sessionId);
+    history.unshift(data);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY_SESSIONS)));
+  } catch (e) {
+    // 历史列表是增强能力，写失败不影响当前审核结果。
+    console.warn("review history 持久化失败（localStorage 配额？）", e);
+  }
 }
 
 export function loadReviewSession(): ReviewSession | null {
@@ -274,5 +323,35 @@ export function loadReviewSession(): ReviewSession | null {
     return raw ? (JSON.parse(raw) as ReviewSession) : null;
   } catch {
     return null;
+  }
+}
+
+/** 读取本地处理历史，最新会话排在最前。 */
+export function listReviewSessions(): ReviewSession[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is ReviewSession => Boolean(item && typeof item === "object" && "sessionId" in item))
+      .sort((a, b) => b.savedAt - a.savedAt);
+  } catch {
+    return [];
+  }
+}
+
+/** 删除一条本地历史；若删除的是当前会话，同时清理当前审核交接。 */
+export function deleteReviewSession(sessionId: string): boolean {
+  const history = listReviewSessions();
+  const found = history.some((item) => item.sessionId === sessionId);
+  if (!found) return false;
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.filter((item) => item.sessionId !== sessionId)));
+    const current = loadReviewSession();
+    if (current?.sessionId === sessionId) localStorage.removeItem(SESSION_KEY);
+    return true;
+  } catch {
+    return false;
   }
 }

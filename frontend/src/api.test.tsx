@@ -7,7 +7,10 @@ import {
   saveHandoff,
   loadReviewSession,
   saveReviewSession,
+  listReviewSessions,
+  deleteReviewSession,
   usePingBackend,
+  generateTaskCards,
 } from "./api";
 
 function mockStorage() {
@@ -74,6 +77,26 @@ describe("localStorage handoff helpers", () => {
     expect(loadReviewSession()).toEqual(data);
   });
 
+  it("keeps review sessions in a deduplicated local history", () => {
+    const first = {
+      savedAt: 3,
+      sessionId: "s-1",
+      productName: "P",
+      aiDraft: "draft",
+      draft: "edited",
+      elapsed: 10,
+      topics: [],
+      stats: { total: 1, n_clusters: 1, noise_count: 0, method: "hdbscan", embed_backend: "local" },
+    };
+    const updated = { ...first, savedAt: 4, draft: "edited again" };
+    saveReviewSession(first);
+    saveReviewSession(updated);
+
+    expect(listReviewSessions()).toEqual([updated]);
+    expect(deleteReviewSession("s-1")).toBe(true);
+    expect(listReviewSessions()).toEqual([]);
+  });
+
   it("saveReviewSession swallows quota errors (does not throw)", () => {
     // 模拟 localStorage 配额写满：setItem 抛 QuotaExceededError
     const quotaStorage = mockStorage();
@@ -122,5 +145,42 @@ describe("usePingBackend", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
     render(<MockPing />);
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("未连接"));
+  });
+});
+
+describe("S2 task cards", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts selected topics and returns traceable cards", async () => {
+    const response = {
+      stage: "task_decompose",
+      status: "ok",
+      total: 1,
+      task_cards: [{ id: "US-001", source_topic: "登录问题" }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => response });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await generateTaskCards("FlowDesk", [
+      {
+        name: "登录问题",
+        description: "无法登录",
+        sentiment: "negative",
+        size: 5,
+        representative: "登录失败",
+        samples: ["登录失败"],
+      },
+    ]);
+
+    expect(result).toEqual(response);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/pipeline/task-cards",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"product_name":"FlowDesk"'),
+      }),
+    );
   });
 });

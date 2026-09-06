@@ -1,7 +1,7 @@
 """M6 审核日志：记录 PRD 审核环节的关键动作，为「PRD 采纳率」指标积累数据。
 
 设计要点：
-- JSONL 事件流（一行一事件），追加写、无锁——单机 MVP 足够，避免为日志引入 DB
+- JSONL 事件流（一行一事件），进程级锁串行追加并按大小自动归档——单机 MVP 足够，避免为日志引入 DB
 - 事件类型：prd_generated / prd_edited / prd_downloaded / export_downloaded
 - 统计为纯函数（读事件列表 → 指标），便于单测；IO 与计算分离
 - 采纳率定义（docs/03-metrics.md）：下载过 PRD 的生成次数 / 总生成次数
@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.core.config import get_settings
+
 LOG_PATH = Path(__file__).resolve().parents[2] / "data" / "review_log.jsonl"
 
 EVENT_TYPES = {"prd_generated", "prd_edited", "prd_downloaded", "export_downloaded"}
@@ -23,6 +25,23 @@ EVENT_TYPES = {"prd_generated", "prd_edited", "prd_downloaded", "export_download
 # 追加写用进程级锁串行化：前端会并发上报生成/编辑/下载事件，
 # 无锁时两个 open(...,"a") 的写可能交错，产生坏行被 read_events 静默丢弃（低估统计）。
 _append_lock = threading.Lock()
+
+
+def _rotate_if_needed() -> None:
+    """将达到大小上限的活动日志改名归档，避免单个 JSONL 无限增长。"""
+    if not LOG_PATH.exists():
+        return
+    max_bytes = max(1, int(get_settings().review_log_max_bytes))
+    if LOG_PATH.stat().st_size < max_bytes:
+        return
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    archive = LOG_PATH.with_name(f"{LOG_PATH.stem}.{stamp}{LOG_PATH.suffix}")
+    counter = 1
+    while archive.exists():
+        archive = LOG_PATH.with_name(f"{LOG_PATH.stem}.{stamp}.{counter}{LOG_PATH.suffix}")
+        counter += 1
+    LOG_PATH.replace(archive)
 
 
 def append_event(event: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -36,24 +55,27 @@ def append_event(event: str, payload: dict[str, Any] | None = None) -> dict[str,
     }
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _append_lock:
+        _rotate_if_needed()
         with LOG_PATH.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     return record
 
 
 def read_events() -> list[dict[str, Any]]:
-    """读取全部事件。损坏行（手改文件等）跳过不炸。"""
-    if not LOG_PATH.exists():
-        return []
+    """读取活动文件与归档文件。损坏行（手改文件等）跳过不炸。"""
+    paths = sorted(LOG_PATH.parent.glob(f"{LOG_PATH.stem}.*{LOG_PATH.suffix}"))
+    if LOG_PATH.exists():
+        paths.append(LOG_PATH)
     events: list[dict[str, Any]] = []
-    for line in LOG_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            events.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
     return events
 
 

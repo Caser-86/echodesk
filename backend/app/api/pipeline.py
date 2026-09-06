@@ -167,6 +167,29 @@ async def generate_prd_draft(body: dict | None = None) -> dict:
     return {**result, "stage": "prd_gen", "llm": get_llm_status()}
 
 
+# ---- S2 任务拆解 ----
+@router.post("/task-cards")
+async def generate_task_cards(body: dict | None = None) -> dict:
+    """S2 任务拆解：主题洞察 → 可审核的用户故事卡。"""
+    from app.services.tasks import build_task_cards
+
+    data = body or {}
+    topics = data.get("topics")
+    if not isinstance(topics, list) or not topics:
+        return {"stage": "task_decompose", "status": "error", "message": "topics 需为非空数组"}
+    try:
+        cards = build_task_cards(topics, product_name=str(data.get("product_name", "")))
+    except ValueError as exc:
+        return {"stage": "task_decompose", "status": "error", "message": str(exc)}
+    return {
+        "stage": "task_decompose",
+        "status": "ok",
+        "product_name": str(data.get("product_name", "")) or "未命名产品",
+        "total": len(cards),
+        "task_cards": cards,
+    }
+
+
 # ---- LLM 连通性诊断 ----
 @router.get("/llm-ping")
 async def llm_ping() -> dict:
