@@ -36,3 +36,6 @@ Thumbs.db
 
 # Trae plan artifacts
 .trae/
+
+# Local browser demo artifacts
+.playwright-cli/

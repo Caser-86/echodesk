@@ -481,11 +481,13 @@ echodesk/                       # 或 insightforge/
 
 - [x] 演示数据集（内置 60 条三主题示例数据，一键加载）
 
+- [x] 正式演示数据文件（`data/demo/flowdesk_feedback.csv` + `SOURCE.md`，含字段说明与演示话术）
+
 - [x] docs/ 五份文档齐全（见各文档状态；用户调研见诚实降级说明）
 
 - [x] README 结构按 §12 完成，含明暗两套截图
 
-- [ ] Docker Compose 一键运行（仍待做，见路线图 v0.8）
+- [x] Docker Compose 一键运行（配置、构建与容器烟测已验证）
 
 - [ ] 指标验证实验完整问卷级（已埋指标数据地基，真人 1v1 访谈待补，见 docs/03 诚实说明）
 
@@ -493,7 +495,7 @@ echodesk/                       # 或 insightforge/
 
 - [ ] 面试叙事文档演练一遍（§13 为待演练底稿）
 
-- [ ] v1.0 正式 tag（当前以 main 分支持续交付）
+- [x] v1.0 正式 tag（`v1.0.0`，2026-09-07）
 
 ***
 

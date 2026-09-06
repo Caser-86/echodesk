@@ -94,7 +94,7 @@ cd backend
 python -m venv .venv && .venv\Scripts\activate    # Windows
 pip install -r requirements.txt
 copy .env.example .env                            # 填入你的 LLM key（或保持 LLM_MODE=mock 离线体验）
-uvicorn app.main:app --port 8000
+uvicorn app.main:app --port 8001
 
 # 前端（Node 18+）
 cd frontend
@@ -102,7 +102,11 @@ npm install
 npm run dev                                        # http://localhost:5173
 ```
 
+- 正式演示数据：上传 `data/demo/flowdesk_feedback.csv`，在导入页选择 `feedback_text` 列；完整字段说明和演示话术见 [`data/demo/SOURCE.md`](data/demo/SOURCE.md)
+
 - 没有 LLM key？设 `LLM_MODE=mock` 即可离线跑通全流程（聚类走本地向量，LLM 返回确定性占位结果）
+
+- 本地开发后端使用 `8001`；Docker Compose 后端使用 `8003`（容器内部仍为 `8000`），避免与本机已有服务冲突
 
 - 支持任意 OpenAI 兼容端点（火山方舟 / 智谱 / DeepSeek / OpenAI），配置说明见 `backend/.env.example`
 
@@ -112,11 +116,13 @@ npm run dev                                        # http://localhost:5173
 
 ```bash
 docker compose up --build
-# 前端 http://localhost:5173 ，后端 http://localhost:8000
+# 前端 http://localhost:5173 ，后端 http://localhost:8003
 ```
 
 - 无需在本机装 Python/Node/模型：前端 Nginx 托管静态资源并反代 `/api`，后端容器内自带全部依赖
+
 - 无 LLM key 时容器默认 `LLM_MODE=auto`，自动回退 mock，离线即可演示全流程
+
 - 数据与上传会落到命名卷 `echodesk-data` / `echodesk-uploads`，重启不丢失
 
 > Docker 与本地两种跑法产物一致；`docker compose up` 首次需拉取镜像并下载本地向量模型（约 100MB）。
@@ -163,7 +169,7 @@ backend/   FastAPI + pydantic-settings
 
 ## 10. 技术栈
 
-React 18 · TypeScript · Vite · Vitest · React Testing Library | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（75 tests）
+React 18 · TypeScript · Vite · Vitest · React Testing Library（35 tests） | FastAPI · pydantic | UMAP · HDBSCAN · sentence-transformers(bge-small-zh) | OpenAI 兼容 LLM API（火山方舟 glm-5-3-flash 实测） | pytest（78 tests）
 
 ***
 

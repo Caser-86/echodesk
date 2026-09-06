@@ -5,7 +5,8 @@ services:
       dockerfile: backend/Dockerfile
     container_name: echodesk-backend
     ports:
-      - "8000:8000"
+      # 宿主机 8000 已被其他项目占用；容器内部仍监听 8000
+      - "8003:8000"
     environment:
       # 从宿主 .env 读取，未配置则使用默认 provider 设置
       # 无 key 时 LLM_MODE 自动回退 mock（auto=无 key 自动 mock），离线可演示
