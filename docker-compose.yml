@@ -27,7 +27,8 @@ services:
       dockerfile: frontend/Dockerfile
     container_name: echodesk-frontend
     ports:
-      - "5173:80"
+      # 宿主机 5173 已被其他项目占用；容器内部仍监听 80
+      - "${FRONTEND_PORT:-5174}:80"
     depends_on:
       - backend
 

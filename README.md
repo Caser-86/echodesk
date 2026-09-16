@@ -106,7 +106,7 @@ npm run dev                                        # http://localhost:5173
 
 - 没有 LLM key？设 `LLM_MODE=mock` 即可离线跑通全流程（聚类走本地向量，LLM 返回确定性占位结果）
 
-- 本地开发后端使用 `8001`；Docker Compose 后端使用 `8003`（容器内部仍为 `8000`），避免与本机已有服务冲突
+- 本地开发后端使用 `8001`；Docker Compose 后端使用 `8003`（容器内部仍为 `8000`），Docker 前端默认使用 `5174`（容器内部仍为 `80`），避免与本机已有服务冲突；可通过 `FRONTEND_PORT` 覆盖
 
 - 支持任意 OpenAI 兼容端点（火山方舟 / 智谱 / DeepSeek / OpenAI），配置说明见 `backend/.env.example`
 
@@ -116,7 +116,7 @@ npm run dev                                        # http://localhost:5173
 
 ```bash
 docker compose up --build
-# 前端 http://localhost:5173 ，后端 http://localhost:8003
+# 前端 http://localhost:5174 ，后端 http://localhost:8003
 ```
 
 - 无需在本机装 Python/Node/模型：前端 Nginx 托管静态资源并反代 `/api`，后端容器内自带全部依赖
