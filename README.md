@@ -7,9 +7,9 @@
 **我独立完成了**：产品定义、AI 管线设计、前后端实现、UI 设计系统、测试体系、文档与迭代决策记录——把它作为求职作品集，展示端到端的 AI 产品工程能力。
 
 ```
-60 条三主题真实反馈（登录故障/导出缺陷/客服失联）
-  → 清洗 60/60 有效 → HDBSCAN 聚出 3 簇（噪声 2 条被正确拒绝归类）
-  → LLM 命名 3/3 合理 → PRD 草稿 3,213 字 / 65.6s / 结构完整度检查 10/10
+60 条三主题合成脱敏反馈（登录故障/导出缺陷/客服失联）
+  → 清洗与去重 → 语义聚类与主题洞察 → PRD 草稿
+  → 审核编辑 → 用户故事卡拆解 → Markdown / JSON / CSV 导出
 ```
 
 **洞察页**——60 条杂乱反馈自动聚出 3 大主题，每簇含情感、概述与代表原文，可展开回溯全部成员：
@@ -64,11 +64,11 @@ CSV/XLSX/TXT → 去空/去重/截断 → 语义向量 → 降维 →  →  LLM 
 
 - **四级向量降级链**：真实 Embedding API → 本地 sentence-transformers（bge-small-zh，隐私模式）→ TF-IDF → 哈希；聚类降级 HDBSCAN → KMeans（轮廓系数自动选 K）
 
-- **reasoning 模型踩坑实录**：方舟 glm-5-3-flash 生成 PRD 时，深度思考会耗尽 `max_tokens` 配额导致正文为空（213s 白跑）。定位后以 `reasoning_effort=low` 解决——reasoning\_tokens 1633→0，耗时/成本降至 1/4，质量无损。详见 [迭代日志 v0.4.0](docs/04-iteration-log.md)
+- **历史 LLM 调参记录**：方舟 glm-5-3-flash 生成 PRD 时，深度思考曾耗尽 `max_tokens` 配额导致正文为空（213s 白跑）。定位后以 `reasoning_effort=low` 解决；当前无 key 时默认走 mock。详见 [迭代日志](docs/04-iteration-log.md)
 
 - **中文数据现实**：CSV 解析做了 BOM 剥离与 GBK 检测链（Excel 另存/中文 Windows 记事本两大坑），零第三方探测依赖
 
-- **测试**：75 个后端单元测试 + 34 个前端组件/工具测试离线跑完（LLM 全 mock）；每个里程碑均带 API 级集成验证
+- **测试**：83 个后端单元测试 + 37 个前端组件/工具测试离线跑完（LLM 全 mock）；另有显式开启的 Playwright 浏览器 E2E
 
 - **UI 设计系统**：自研 CSS tokens + 共享组件，无 UI 库依赖；支持响应式布局与系统/手动暗色模式
 
@@ -78,9 +78,9 @@ CSV/XLSX/TXT → 去空/去重/截断 → 语义向量 → 降维 →  →  LLM 
 
 | 验证项            | 结果                                                    |
 | -------------- | ----------------------------------------------------- |
-| 聚类准确率（60 条三主题） | 3 簇全部正确，噪声 2 条（边界样本被正确拒绝归类）                           |
-| 主题命名质量         | 3/3 人工判定合理，情感判断全对                                     |
-| PRD 生成         | 3,213 字 / 65.6s；结构完整度 10/10（六章齐全、来源标注、优先级带理由、验收标准可量化） |
+| 聚类质量（60 条合成三主题） | 自测得到 3 簇，边界样本可能被识别为噪声；结果随 embedding 和参数变化 |
+| 主题命名质量         | 自测 3/3 合理；真人 PM 盲评尚未完成                                      |
+| PRD 生成         | Mock 模式可离线生成确定性占位草稿；真实 LLM 质量需使用已配置的 OpenAI 兼容端点单独验证 |
 | 编码兼容           | GBK / UTF-8 BOM / XLSX 实测无乱码                          |
 | 降级链            | LLM 断连时管线照常应答，前端显示降级状态                                |
 
@@ -131,23 +131,33 @@ docker compose up --build
 
 ```
 frontend/  React 18 + TypeScript + Vite（自研 UI 设计系统，路由 react-router）
-   │  4 页面：导入 / 洞察（管线串联+簇卡片）/ PRD 审核（编辑/还原/下载）/ 导出
+   │  5 页面：导入 / 洞察 / PRD 审核 / 导出 / 历史记录
    │  响应式布局 + 暗色模式 + Vitest/React Testing Library 组件测试
    ▼  fetch（dev 经 Vite 代理）
 backend/   FastAPI + pydantic-settings
-   ├─ api/pipeline.py    REST 端点（import/clean/cluster/prd-gen + SSE 进度通道）
+   ├─ api/pipeline.py    REST 端点（import/clean/cluster/prd-gen/task-cards + SSE）
+   ├─ api/reviewlog.py   审核事件上报与采纳率统计
    ├─ services/
    │   ├─ ingest.py      CSV/XLSX/TXT 解析（编码链）
    │   ├─ clean.py       清洗（纯函数）
-   │   ├─ cluster.py     向量→UMAP→HDBSCAN→LLM 命名（独立熔断）
-   │   └─ prd.py         PRD 生成（reasoning_effort=low）
-   ├─ core/llm.py        LLM Provider 抽象：live/mock/auto + 指数退避 + 熔断降级
-   └─ prompts/prd/       Prompt 版本化文件
+   │   ├─ cluster.py     向量→UMAP→HDBSCAN/KMeans（独立熔断）
+   │   ├─ insight.py     主题命名、情感和痛点摘要
+   │   ├─ prd.py         PRD 生成（live/mock/auto）
+   │   ├─ tasks.py       确定性用户故事卡模板
+   │   └─ reviewlog.py   JSONL 追加、轮转与统计
+   ├─ core/llm.py        LLM Provider 抽象：live/mock/auto + 重试 + 熔断降级
+   └─ prompts/            聚类命名与 PRD Prompt 版本化文件
 ```
+
+当前 MVP 不使用数据库：审核事件写入 JSONL，处理历史保存在浏览器 `localStorage`；`sqlmodel` 仍是依赖文件中的预留依赖，尚未作为应用存储层使用。
 
 ## 8. 项目文档
 
-- [项目计划（含 MoSCoW 范围与 14 天排期）](docs/00-project-plan.md)
+- [项目上下文：当前状态、架构、限制与关键决策](CONTEXT.md)
+
+- [待办事项：只保留尚未完成的任务](TODO.md)
+
+- [项目计划与范围](docs/00-project-plan.md)
 
 - [用户调研](docs/01-user-research.md)
 
@@ -155,7 +165,7 @@ backend/   FastAPI + pydantic-settings
 
 - [指标与验证](docs/03-metrics.md)
 
-- [迭代与决策记录](docs/04-iteration-log.md)（8 个版本，含每次技术决策的备选方案与理由）
+- [迭代与决策记录](docs/04-iteration-log.md)（按版本记录技术决策、备选方案与后果）
 
 - [竞品分析](docs/05-competitive-analysis.md)
 
@@ -167,7 +177,7 @@ backend/   FastAPI + pydantic-settings
 
 - **v1.1 ✅**：用户故事卡任务拆解；浏览器本地处理历史；审核 JSONL 日志自动归档；版本标识统一为 `1.1.0`
 
-- **v2 构想**：多轮反馈增量合并、需求去重与关联（跨批次）、Jira/飞书对接
+- **待定增强**：多轮反馈增量合并、需求去重与关联（跨批次）、词云、多语言、Jira/飞书对接；详见 [TODO.md](TODO.md)
 
 ## 10. 技术栈
 
